@@ -27,7 +27,6 @@ export function startScheduler(): void {
     await oddsQueue.add("fetch-nba-odds", { sport: NBA_SPORT, markets: MARKETS, commenceTimeTo });
   });
 
-  // Poll public betting percentages every 30 minutes
   cron.schedule("*/30 * * * *", async () => {
     console.log("Scheduling public betting fetch jobs...");
     const scheduledGames = await prisma.game.findMany({

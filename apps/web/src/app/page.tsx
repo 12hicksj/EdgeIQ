@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { prisma } from "@betting/db";
+import { generateDailyDigest } from "@betting/ai";
 import { GameCard } from "@/components/GameCard";
 import { BetTracker } from "@/components/BetTracker";
 import { detectLineMovement, detectReverseLineMovement } from "@betting/models";
@@ -7,13 +8,7 @@ import type { LineMovementResult } from "@betting/models";
 
 async function getDailyDigest(): Promise<string | null> {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/digest`,
-      { next: { revalidate: 3600 } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.digest ?? null;
+    return await generateDailyDigest(new Date());
   } catch {
     return null;
   }
