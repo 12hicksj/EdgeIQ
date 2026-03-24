@@ -8,22 +8,34 @@ interface OddsJobData {
   markets: string[];
   commenceTimeTo?: string;
   commenceTimeFrom?: string;
+  /** When true, fetch scores to update game statuses instead of odds */
   updateScores?: boolean;
 }
 
 async function updateGameScores(sport: string): Promise<void> {
   const scoreGames = await getScores(sport, 1);
+
   for (const sg of scoreGames) {
     const newStatus = sg.completed
       ? GameStatus.FINAL
       : new Date(sg.commence_time) <= new Date()
         ? GameStatus.LIVE
         : GameStatus.SCHEDULED;
+
+    const homeScore = sg.scores?.find((s) => s.name === sg.home_team)?.score;
+    const awayScore = sg.scores?.find((s) => s.name === sg.away_team)?.score;
+
     await prisma.game.updateMany({
       where: { externalId: sg.id },
-      data: { status: newStatus, updatedAt: new Date() },
+      data: {
+        status: newStatus,
+        updatedAt: new Date(),
+        ...(homeScore !== undefined && { homeScore: parseInt(homeScore, 10) }),
+        ...(awayScore !== undefined && { awayScore: parseInt(awayScore, 10) }),
+      },
     });
   }
+
   console.log(`Updated scores for ${scoreGames.length} ${sport} games`);
 }
 
@@ -42,30 +54,35 @@ async function ingestOdds(job: Job<OddsJobData>): Promise<void> {
   for (const game of games) {
     const dbGame = await prisma.game.upsert({
       where: { externalId: game.id },
-      update: { homeTeam: game.home_team, awayTeam: game.away_team, commenceTime: new Date(game.commence_time), updatedAt: new Date() },
-      create: { externalId: game.id, sport: game.sport_key, homeTeam: game.home_team, awayTeam: game.away_team, commenceTime: new Date(game.commence_time), status: GameStatus.SCHEDULED },
+      update: { homeTeam: game.home_team, awayTeam: game.away_team, commenceTime: new Date(game.commence_time), sportTitle: game.sport_title, updatedAt: new Date() },
+      create: { externalId: game.id, sport: game.sport_key, sportTitle: game.sport_title, homeTeam: game.home_team, awayTeam: game.away_team, commenceTime: new Date(game.commence_time), status: GameStatus.SCHEDULED },
     });
 
     const snapshots = [];
 
     for (const bookmaker of game.bookmakers) {
+      // last_update = when bookmaker actually moved their line (vs capturedAt = when we polled)
+      const bookmakerUpdatedAt = bookmaker.last_update ? new Date(bookmaker.last_update) : null;
+
       for (const market of bookmaker.markets) {
+        const base = { gameId: dbGame.id, bookmaker: bookmaker.key, market: market.key, capturedAt, bookmakerUpdatedAt };
+
         if (market.key === "h2h") {
           const homeOutcome = market.outcomes.find((o) => o.name === game.home_team);
           const awayOutcome = market.outcomes.find((o) => o.name === game.away_team);
           if (!homeOutcome || !awayOutcome) continue;
-          snapshots.push({ gameId: dbGame.id, bookmaker: bookmaker.key, market: market.key, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price, capturedAt });
+          snapshots.push({ ...base, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price });
         } else if (market.key === "spreads") {
           const homeOutcome = market.outcomes.find((o) => o.name === game.home_team);
           const awayOutcome = market.outcomes.find((o) => o.name === game.away_team);
           if (!homeOutcome || !awayOutcome) continue;
-          snapshots.push({ gameId: dbGame.id, bookmaker: bookmaker.key, market: market.key, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price, spread: homeOutcome.point ?? null, capturedAt });
+          snapshots.push({ ...base, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price, spread: homeOutcome.point ?? null });
         } else if (market.key === "totals") {
-          // Totals outcomes are "Over" and "Under", NOT team names
+          // Totals outcomes are "Over" and "Under" - NOT team names
           const overOutcome = market.outcomes.find((o) => o.name === "Over");
           const underOutcome = market.outcomes.find((o) => o.name === "Under");
           if (!overOutcome || !underOutcome) continue;
-          snapshots.push({ gameId: dbGame.id, bookmaker: bookmaker.key, market: market.key, homeOdds: overOutcome.price, awayOdds: underOutcome.price, total: overOutcome.point ?? null, capturedAt });
+          snapshots.push({ ...base, homeOdds: overOutcome.price, awayOdds: underOutcome.price, total: overOutcome.point ?? null });
         }
       }
     }
@@ -83,10 +100,6 @@ async function processOddsJob(job: Job<OddsJobData>): Promise<void> {
   return ingestOdds(job);
 }
 
-export const oddsWorker = new Worker<OddsJobData>("odds", processOddsJob, {
-  connection: redisConnection,
-  concurrency: 2,
-});
-
+export const oddsWorker = new Worker<OddsJobData>("odds", processOddsJob, { connection: redisConnection, concurrency: 2 });
 oddsWorker.on("completed", (job) => console.log(`Odds job ${job.id} completed`));
 oddsWorker.on("failed", (job, err) => console.error(`Odds job ${job?.id} failed:`, err.message));
