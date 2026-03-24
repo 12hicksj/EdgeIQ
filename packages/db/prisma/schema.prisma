@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GameStatus {
+  SCHEDULED
+  LIVE
+  FINAL
+}
+
+enum BetResult {
+  PENDING
+  WIN
+  LOSS
+  PUSH
+}
+
+enum AIRecommendation {
+  STRONG_BET
+  LEAN
+  PASS
+}
+
+model Game {
+  id           String     @id @default(cuid())
+  externalId   String     @unique
+  sport        String
+  homeTeam     String
+  awayTeam     String
+  commenceTime DateTime
+  status       GameStatus @default(SCHEDULED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  oddsSnapshots    OddsSnapshot[]
+  lineMovements    LineMovement[]
+  publicBettingData PublicBettingData[]
+  bets             Bet[]
+  aiAnalyses       AIAnalysis[]
+}
+
+model OddsSnapshot {
+  id         String   @id @default(cuid())
+  gameId     String
+  bookmaker  String
+  market     String
+  homeOdds   Float
+  awayOdds   Float
+  spread     Float?
+  total      Float?
+  capturedAt DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@index([gameId, capturedAt])
+  @@index([capturedAt])
+}
+
+model LineMovement {
+  id                  String   @id @default(cuid())
+  gameId              String
+  market              String
+  openingSpread       Float?
+  currentSpread       Float?
+  openingTotal        Float?
+  currentTotal        Float?
+  openingHomeOdds     Float?
+  currentHomeOdds     Float?
+  movementMagnitude   Float
+  sharpIndicator      Boolean  @default(false)
+  capturedAt          DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@index([gameId, capturedAt])
+  @@index([capturedAt])
+}
+
+model PublicBettingData {
+  id             String   @id @default(cuid())
+  gameId         String
+  homeTicketPct  Float
+  awayTicketPct  Float
+  homeMoneyPct   Float
+  awayMoneyPct   Float
+  capturedAt     DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@index([gameId, capturedAt])
+}
+
+model Bet {
+  id           String    @id @default(cuid())
+  gameId       String
+  market       String
+  side         String
+  odds         Float
+  units        Float
+  result       BetResult @default(PENDING)
+  closingOdds  Float?
+  notes        String?
+  placedAt     DateTime  @default(now())
+
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@index([gameId])
+}
+
+model AIAnalysis {
+  id             String           @id @default(cuid())
+  gameId         String
+  edgeScore      Float
+  summary        String
+  keyFactors     String
+  recommendation AIRecommendation
+  generatedAt    DateTime         @default(now())
+
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@index([gameId])
+}
