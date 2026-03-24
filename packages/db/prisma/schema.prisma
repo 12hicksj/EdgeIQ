@@ -30,30 +30,34 @@ model Game {
   id           String     @id @default(cuid())
   externalId   String     @unique
   sport        String
+  sportTitle   String     @default("")
   homeTeam     String
   awayTeam     String
   commenceTime DateTime
   status       GameStatus @default(SCHEDULED)
+  homeScore    Int?
+  awayScore    Int?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  oddsSnapshots    OddsSnapshot[]
-  lineMovements    LineMovement[]
+  oddsSnapshots     OddsSnapshot[]
+  lineMovements     LineMovement[]
   publicBettingData PublicBettingData[]
-  bets             Bet[]
-  aiAnalyses       AIAnalysis[]
+  bets              Bet[]
+  aiAnalyses        AIAnalysis[]
 }
 
 model OddsSnapshot {
-  id         String   @id @default(cuid())
-  gameId     String
-  bookmaker  String
-  market     String
-  homeOdds   Float
-  awayOdds   Float
-  spread     Float?
-  total      Float?
-  capturedAt DateTime @default(now())
+  id                 String    @id @default(cuid())
+  gameId             String
+  bookmaker          String
+  market             String
+  homeOdds           Float
+  awayOdds           Float
+  spread             Float?
+  total              Float?
+  bookmakerUpdatedAt DateTime?
+  capturedAt         DateTime  @default(now())
 
   game Game @relation(fields: [gameId], references: [id])
 
@@ -62,18 +66,18 @@ model OddsSnapshot {
 }
 
 model LineMovement {
-  id                  String   @id @default(cuid())
-  gameId              String
-  market              String
-  openingSpread       Float?
-  currentSpread       Float?
-  openingTotal        Float?
-  currentTotal        Float?
-  openingHomeOdds     Float?
-  currentHomeOdds     Float?
-  movementMagnitude   Float
-  sharpIndicator      Boolean  @default(false)
-  capturedAt          DateTime @default(now())
+  id                String   @id @default(cuid())
+  gameId            String
+  market            String
+  openingSpread     Float?
+  currentSpread     Float?
+  openingTotal      Float?
+  currentTotal      Float?
+  openingHomeOdds   Float?
+  currentHomeOdds   Float?
+  movementMagnitude Float
+  sharpIndicator    Boolean  @default(false)
+  capturedAt        DateTime @default(now())
 
   game Game @relation(fields: [gameId], references: [id])
 
@@ -82,13 +86,13 @@ model LineMovement {
 }
 
 model PublicBettingData {
-  id             String   @id @default(cuid())
-  gameId         String
-  homeTicketPct  Float
-  awayTicketPct  Float
-  homeMoneyPct   Float
-  awayMoneyPct   Float
-  capturedAt     DateTime @default(now())
+  id            String   @id @default(cuid())
+  gameId        String
+  homeTicketPct Float
+  awayTicketPct Float
+  homeMoneyPct  Float
+  awayMoneyPct  Float
+  capturedAt    DateTime @default(now())
 
   game Game @relation(fields: [gameId], references: [id])
 
@@ -96,16 +100,16 @@ model PublicBettingData {
 }
 
 model Bet {
-  id           String    @id @default(cuid())
-  gameId       String
-  market       String
-  side         String
-  odds         Float
-  units        Float
-  result       BetResult @default(PENDING)
-  closingOdds  Float?
-  notes        String?
-  placedAt     DateTime  @default(now())
+  id          String    @id @default(cuid())
+  gameId      String
+  market      String
+  side        String
+  odds        Float
+  units       Float
+  result      BetResult @default(PENDING)
+  closingOdds Float?
+  notes       String?
+  placedAt    DateTime  @default(now())
 
   game Game @relation(fields: [gameId], references: [id])
 

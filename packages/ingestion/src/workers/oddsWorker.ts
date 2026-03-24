@@ -8,30 +8,56 @@ interface OddsJobData {
   markets: string[];
   commenceTimeTo?: string;
   commenceTimeFrom?: string;
+  /** When true, fetch scores to update game statuses instead of odds */
   updateScores?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Score update handler
+// ---------------------------------------------------------------------------
+
 async function updateGameScores(sport: string): Promise<void> {
+  // daysFrom=1: costs 2 credits; returns completed + live + upcoming games
   const scoreGames = await getScores(sport, 1);
+
   for (const sg of scoreGames) {
     const newStatus = sg.completed
       ? GameStatus.FINAL
       : new Date(sg.commence_time) <= new Date()
         ? GameStatus.LIVE
         : GameStatus.SCHEDULED;
+
+    // Extract final scores when the game is completed
+    const homeScore = sg.scores?.find((s) => s.name === sg.home_team)?.score;
+    const awayScore = sg.scores?.find((s) => s.name === sg.away_team)?.score;
+
     await prisma.game.updateMany({
       where: { externalId: sg.id },
-      data: { status: newStatus, updatedAt: new Date() },
+      data: {
+        status: newStatus,
+        updatedAt: new Date(),
+        ...(homeScore !== undefined && { homeScore: parseInt(homeScore, 10) }),
+        ...(awayScore !== undefined && { awayScore: parseInt(awayScore, 10) }),
+      },
     });
   }
+
   console.log(`Updated scores for ${scoreGames.length} ${sport} games`);
 }
+
+// ---------------------------------------------------------------------------
+// Odds ingestion handler
+// ---------------------------------------------------------------------------
 
 async function ingestOdds(job: Job<OddsJobData>): Promise<void> {
   const { sport, markets, commenceTimeFrom, commenceTimeTo } = job.data;
   console.log(`Processing odds job for sport: ${sport}`);
 
-  const { games, rateLimit } = await getOdds(sport, markets, { commenceTimeFrom, commenceTimeTo });
+  const { games, rateLimit } = await getOdds(sport, markets, {
+    commenceTimeFrom,
+    commenceTimeTo,
+  });
+
   console.log(
     `Odds API: ${rateLimit.requestsRemaining} credits remaining ` +
     `(used ${rateLimit.requestsUsed}, last call cost ${rateLimit.requestsLast})`
@@ -42,36 +68,65 @@ async function ingestOdds(job: Job<OddsJobData>): Promise<void> {
   for (const game of games) {
     const dbGame = await prisma.game.upsert({
       where: { externalId: game.id },
-      update: { homeTeam: game.home_team, awayTeam: game.away_team, commenceTime: new Date(game.commence_time), updatedAt: new Date() },
-      create: { externalId: game.id, sport: game.sport_key, homeTeam: game.home_team, awayTeam: game.away_team, commenceTime: new Date(game.commence_time), status: GameStatus.SCHEDULED },
+      update: {
+        homeTeam: game.home_team,
+        awayTeam: game.away_team,
+        commenceTime: new Date(game.commence_time),
+        sportTitle: game.sport_title,
+        updatedAt: new Date(),
+      },
+      create: {
+        externalId: game.id,
+        sport: game.sport_key,
+        sportTitle: game.sport_title,
+        homeTeam: game.home_team,
+        awayTeam: game.away_team,
+        commenceTime: new Date(game.commence_time),
+        status: GameStatus.SCHEDULED,
+      },
     });
 
     const snapshots = [];
 
     for (const bookmaker of game.bookmakers) {
+      // last_update reflects when the bookmaker actually moved their line,
+      // which may differ significantly from capturedAt (our poll time).
+      const bookmakerUpdatedAt = bookmaker.last_update
+        ? new Date(bookmaker.last_update)
+        : null;
+
       for (const market of bookmaker.markets) {
-        // h2h — outcomes named by team; no point
+        const base = {
+          gameId: dbGame.id,
+          bookmaker: bookmaker.key,
+          market: market.key,
+          capturedAt,
+          bookmakerUpdatedAt,
+        };
+
+        // h2h - outcomes named by team name; no point value
         if (market.key === "h2h") {
           const homeOutcome = market.outcomes.find((o) => o.name === game.home_team);
           const awayOutcome = market.outcomes.find((o) => o.name === game.away_team);
           if (!homeOutcome || !awayOutcome) continue;
-          snapshots.push({ gameId: dbGame.id, bookmaker: bookmaker.key, market: market.key, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price, capturedAt });
+          snapshots.push({ ...base, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price });
         }
-        // spreads — outcomes named by team; point = spread value
+        // spreads - outcomes named by team; point = spread value
         else if (market.key === "spreads") {
           const homeOutcome = market.outcomes.find((o) => o.name === game.home_team);
           const awayOutcome = market.outcomes.find((o) => o.name === game.away_team);
           if (!homeOutcome || !awayOutcome) continue;
-          snapshots.push({ gameId: dbGame.id, bookmaker: bookmaker.key, market: market.key, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price, spread: homeOutcome.point ?? null, capturedAt });
+          snapshots.push({ ...base, homeOdds: homeOutcome.price, awayOdds: awayOutcome.price, spread: homeOutcome.point ?? null });
         }
-        // totals — outcomes are "Over" and "Under" (NOT team names)
-        // Over odds stored as homeOdds, Under as awayOdds by convention
+        // totals - outcomes are "Over" and "Under" (NOT team names)
+        // Over odds stored as homeOdds, Under as awayOdds by convention.
         else if (market.key === "totals") {
           const overOutcome = market.outcomes.find((o) => o.name === "Over");
           const underOutcome = market.outcomes.find((o) => o.name === "Under");
           if (!overOutcome || !underOutcome) continue;
-          snapshots.push({ gameId: dbGame.id, bookmaker: bookmaker.key, market: market.key, homeOdds: overOutcome.price, awayOdds: underOutcome.price, total: overOutcome.point ?? null, capturedAt });
+          snapshots.push({ ...base, homeOdds: overOutcome.price, awayOdds: underOutcome.price, total: overOutcome.point ?? null });
         }
+        // Other markets (outrights, props, etc.) are ignored at this stage
       }
     }
 
@@ -82,6 +137,10 @@ async function ingestOdds(job: Job<OddsJobData>): Promise<void> {
 
   console.log(`Processed ${games.length} games for ${sport}`);
 }
+
+// ---------------------------------------------------------------------------
+// Worker
+// ---------------------------------------------------------------------------
 
 async function processOddsJob(job: Job<OddsJobData>): Promise<void> {
   if (job.data.updateScores) return updateGameScores(job.data.sport);
