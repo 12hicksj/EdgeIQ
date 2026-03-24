@@ -1,4 +1,4 @@
-# Sports Betting Intelligence Dashboard
+# EdgeIQ — Sports Betting Intelligence Dashboard
 
 ## Prerequisites
 - Docker and Docker Compose

@@ -108,7 +108,7 @@ export default async function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">
-              Betting Intelligence Dashboard
+              EdgeIQ
             </h1>
             <p className="text-gray-400 text-sm mt-1">
               {new Date().toLocaleDateString("en-US", {

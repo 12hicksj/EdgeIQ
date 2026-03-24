@@ -1,5 +1,5 @@
 {
-  "name": "betting-dashboard",
+  "name": "edgeiq",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {

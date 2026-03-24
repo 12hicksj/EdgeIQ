@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Betting Intelligence Dashboard",
-  description: "Sports betting analytics powered by AI",
+  title: "EdgeIQ",
+  description: "Sports betting intelligence powered by AI",
 };
 
 export default function RootLayout({
