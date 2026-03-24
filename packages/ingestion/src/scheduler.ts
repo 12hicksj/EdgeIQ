@@ -4,6 +4,8 @@ import { prisma } from "@betting/db";
 
 const NFL_SPORT = "americanfootball_nfl";
 const NBA_SPORT = "basketball_nba";
+// Quota cost per call: 3 markets x 1 region = 3 credits
+// Two sports per cycle = 6 credits per 10-minute tick
 const MARKETS = ["h2h", "spreads", "totals"];
 
 /**
@@ -17,6 +19,7 @@ const MARKETS = ["h2h", "spreads", "totals"];
 export function startScheduler(): void {
   console.log("Starting scheduler...");
 
+  // Poll odds every 10 minutes during 6am-midnight
   cron.schedule("*/10 6-23 * * *", async () => {
     console.log("Scheduling odds fetch jobs...");
     const commenceTimeTo = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -38,6 +41,7 @@ export function startScheduler(): void {
     }
   });
 
+  // Update completed/live game scores every 30 minutes (2 credits per sport)
   cron.schedule("*/30 * * * *", async () => {
     console.log("Scheduling scores update jobs...");
     await oddsQueue.add("update-nfl-scores", { sport: NFL_SPORT, markets: [], updateScores: true });

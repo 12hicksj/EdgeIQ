@@ -101,7 +101,7 @@ function extractRateLimit(res: AxiosResponse): RateLimitInfo {
 }
 
 /**
- * Get list of sports. FREE - does not count against quota.
+ * Get list of sports. FREE — does not count against quota.
  */
 export async function getSports(all = false): Promise<Sport[]> {
   const response = await client.get<Sport[]>("/sports", {
@@ -111,7 +111,7 @@ export async function getSports(all = false): Promise<Sport[]> {
 }
 
 /**
- * Get upcoming/in-play events without odds. FREE - does not count against quota.
+ * Get upcoming/in-play events without odds. FREE — does not count against quota.
  * Use sport="upcoming" to get the next 8 games across all sports.
  */
 export async function getEvents(
