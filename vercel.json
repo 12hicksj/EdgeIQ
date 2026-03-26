@@ -3,5 +3,11 @@
   "buildCommand": "npx prisma generate --schema=packages/db/prisma/schema.prisma && cd apps/web && npm run build",
   "outputDirectory": "apps/web/.next",
   "installCommand": "npm install",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/ingest",
+      "schedule": "*/10 6-23 * * *"
+    }
+  ]
 }
