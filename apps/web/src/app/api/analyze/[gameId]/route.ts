@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@betting/db";
-import { analyzeGame } from "@betting/ai";
-import { detectLineMovement, detectReverseLineMovement } from "@betting/models";
+import { prisma } from "@edgeiq/db";
+import { analyzeGame } from "@edgeiq/ai";
+import { detectLineMovement, detectReverseLineMovement } from "@edgeiq/models";
 
 export async function POST(
   _request: NextRequest,

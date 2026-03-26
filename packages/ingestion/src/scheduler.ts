@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { oddsQueue, publicBettingQueue } from "./queues";
-import { prisma } from "@betting/db";
+import { prisma } from "@edgeiq/db";
 
 const NFL_SPORT = "americanfootball_nfl";
 const NBA_SPORT = "basketball_nba";

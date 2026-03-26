@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@betting/db";
+import { prisma } from "@edgeiq/db";
 
 export async function GET() {
   const today = new Date();

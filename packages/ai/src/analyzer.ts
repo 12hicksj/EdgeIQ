@@ -1,5 +1,5 @@
-import { prisma } from "@betting/db";
-import type { AIAnalysis } from "@betting/db";
+import { prisma } from "@edgeiq/db";
+import type { AIAnalysis } from "@edgeiq/db";
 import { anthropic, MODEL } from "./client";
 import {
   buildGameAnalysisPrompt,

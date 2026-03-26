@@ -1,5 +1,5 @@
 import { Worker, Job } from "bullmq";
-import { prisma, GameStatus } from "@betting/db";
+import { prisma, GameStatus } from "@edgeiq/db";
 import { getOdds, getScores } from "../clients/oddsApi";
 import { redisConnection } from "../queues";
 

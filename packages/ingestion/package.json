@@ -1,5 +1,5 @@
 {
-  "name": "@betting/ingestion",
+  "name": "@edgeiq/ingestion",
   "version": "0.1.0",
   "main": "./src/index.ts",
   "scripts": {
@@ -7,7 +7,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@betting/db": "*",
+    "@edgeiq/db": "*",
     "bullmq": "^5.7.0",
     "axios": "^1.6.8",
     "node-cron": "^3.0.3",

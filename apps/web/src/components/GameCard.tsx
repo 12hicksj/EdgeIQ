@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Game, OddsSnapshot, PublicBettingData, AIAnalysis } from "@betting/db";
-import type { LineMovementResult } from "@betting/models";
+import type { Game, OddsSnapshot, PublicBettingData, AIAnalysis } from "@edgeiq/db";
+import type { LineMovementResult } from "@edgeiq/models";
 import { EdgeScoreGauge } from "./EdgeScoreGauge";
 import { LineMovementChart } from "./LineMovementChart";
 

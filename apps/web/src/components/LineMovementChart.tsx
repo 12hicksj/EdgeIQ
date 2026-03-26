@@ -10,7 +10,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import type { OddsSnapshot } from "@betting/db";
+import type { OddsSnapshot } from "@edgeiq/db";
 
 interface LineMovementChartProps {
   snapshots: OddsSnapshot[];

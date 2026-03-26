@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateDailyDigest } from "@betting/ai";
+import { generateDailyDigest } from "@edgeiq/ai";
 
 export const dynamic = "force-dynamic";
 

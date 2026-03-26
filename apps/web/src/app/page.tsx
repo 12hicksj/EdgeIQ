@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { prisma } from "@betting/db";
-import { generateDailyDigest } from "@betting/ai";
+import { prisma } from "@edgeiq/db";
+import { generateDailyDigest } from "@edgeiq/ai";
 import { GameCard } from "@/components/GameCard";
 import { BetTracker } from "@/components/BetTracker";
-import { detectLineMovement, detectReverseLineMovement } from "@betting/models";
-import type { LineMovementResult } from "@betting/models";
+import { detectLineMovement, detectReverseLineMovement } from "@edgeiq/models";
+import type { LineMovementResult } from "@edgeiq/models";
 
 async function getDailyDigest(): Promise<string | null> {
   try {

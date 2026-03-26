@@ -1,4 +1,4 @@
-import type { PublicBettingData } from "@betting/db";
+import type { PublicBettingData } from "@edgeiq/db";
 import type { LineMovementResult } from "./lineMovement";
 
 /**

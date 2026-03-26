@@ -1,4 +1,4 @@
-import type { OddsSnapshot, PublicBettingData } from "@betting/db";
+import type { OddsSnapshot, PublicBettingData } from "@edgeiq/db";
 
 /**
  * Result of line movement analysis between snapshots

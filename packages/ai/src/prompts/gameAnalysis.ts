@@ -1,5 +1,5 @@
-import type { Game, OddsSnapshot, PublicBettingData } from "@betting/db";
-import type { LineMovementResult } from "@betting/models";
+import type { Game, OddsSnapshot, PublicBettingData } from "@edgeiq/db";
+import type { LineMovementResult } from "@edgeiq/models";
 
 export interface GameAnalysisParams {
   game: Game;

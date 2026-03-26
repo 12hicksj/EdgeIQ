@@ -1,12 +1,12 @@
 {
-  "name": "@betting/models",
+  "name": "@edgeiq/models",
   "version": "0.1.0",
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc"
   },
   "dependencies": {
-    "@betting/db": "*"
+    "@edgeiq/db": "*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
