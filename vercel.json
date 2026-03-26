@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npx turbo run build --filter=web",
+  "buildCommand": "npx turbo run build --filter=@edgeiq/web",
   "outputDirectory": "apps/web/.next",
   "installCommand": "npm install",
   "framework": "nextjs"
