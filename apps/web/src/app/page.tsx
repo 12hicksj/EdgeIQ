@@ -34,8 +34,6 @@ async function ingestIfStale(): Promise<void> {
       ingestOddsForSport(sport, MARKETS, { commenceTimeTo })
     )
   );
-
-  await analyzeUnanalyzedGames();
 }
 
 const VALID_SORT_FIELDS = ["commenceTime", "homeTeam", "awayTeam", "sport"] as const;
@@ -61,6 +59,7 @@ function LoadingSkeleton() {
 
 async function GamesGrid({ searchParams }: { searchParams: SearchParams }) {
   await ingestIfStale();
+  await analyzeUnanalyzedGames();
 
   const sort: SortField =
     VALID_SORT_FIELDS.find((f) => f === searchParams.sort) ?? "commenceTime";
