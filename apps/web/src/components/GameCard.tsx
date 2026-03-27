@@ -24,6 +24,10 @@ function fmt(odds: number) {
   return `${odds > 0 ? "+" : ""}${odds}`;
 }
 
+function abbr(teamName: string) {
+  return teamName.split(" ").pop() ?? teamName;
+}
+
 export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }: GameCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   const edgeScore = aiAnalysis?.edgeScore ?? 0;
@@ -90,31 +94,35 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
             <p className="text-gray-500 mb-1 font-medium">Moneyline</p>
             {h2h ? (
               <>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Home</span>
-                  <span className="text-white font-mono">{fmt(h2h.homeOdds)}</span>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam)}</span>
+                  <span className="text-white font-mono shrink-0">{fmt(h2h.homeOdds)}</span>
                 </div>
-                <div className="flex justify-between mt-0.5">
-                  <span className="text-gray-400">Away</span>
-                  <span className="text-white font-mono">{fmt(h2h.awayOdds)}</span>
+                <div className="flex justify-between items-baseline mt-0.5">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam)}</span>
+                  <span className="text-white font-mono shrink-0">{fmt(h2h.awayOdds)}</span>
                 </div>
               </>
             ) : <p className="text-gray-600">—</p>}
           </div>
 
           <div className="bg-gray-800 rounded p-2">
-            <p className="text-gray-500 mb-1 font-medium">Spread</p>
+            <p className="text-gray-500 mb-1 font-medium">
+              Spread{lineMovement?.isSharp && <span className="text-orange-400 ml-1">⚡</span>}
+            </p>
             {spread ? (
               <>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Home</span>
-                  <span className="text-white font-mono">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam)}</span>
+                  <span className="text-white font-mono shrink-0">
                     {spread.spread !== null ? (spread.spread > 0 ? "+" : "") + spread.spread : "—"}
                   </span>
                 </div>
-                <div className="flex justify-between mt-0.5">
-                  <span className="text-gray-500 text-[10px]">vig</span>
-                  <span className="text-gray-500 font-mono text-[10px]">{fmt(spread.homeOdds)}/{fmt(spread.awayOdds)}</span>
+                <div className="flex justify-between items-baseline mt-0.5">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam)}</span>
+                  <span className="text-white font-mono shrink-0">
+                    {spread.spread !== null ? ((-spread.spread) > 0 ? "+" : "") + (-spread.spread) : "—"}
+                  </span>
                 </div>
               </>
             ) : <p className="text-gray-600">—</p>}
@@ -124,13 +132,13 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
             <p className="text-gray-500 mb-1 font-medium">Total</p>
             {total ? (
               <>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-baseline">
                   <span className="text-gray-400">O/U</span>
-                  <span className="text-white font-mono">{total.total ?? "—"}</span>
+                  <span className="text-white font-mono shrink-0">{total.total ?? "—"}</span>
                 </div>
-                <div className="flex justify-between mt-0.5">
+                <div className="flex justify-between items-baseline mt-0.5">
                   <span className="text-gray-500 text-[10px]">vig</span>
-                  <span className="text-gray-500 font-mono text-[10px]">{fmt(total.homeOdds)}/{fmt(total.awayOdds)}</span>
+                  <span className="text-gray-500 font-mono text-[10px] shrink-0">{fmt(total.homeOdds)}/{fmt(total.awayOdds)}</span>
                 </div>
               </>
             ) : <p className="text-gray-600">—</p>}
