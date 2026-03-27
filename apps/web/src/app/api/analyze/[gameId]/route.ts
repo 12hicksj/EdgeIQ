@@ -34,7 +34,7 @@ export async function POST(
     lineMovement.isSharp = detectReverseLineMovement(publicBetting, lineMovement);
   }
 
-  const analysis = await analyzeGame({ game, latestOdds, lineMovement, publicBetting });
+  const analysis = await analyzeGame({ game, latestOdds, lineMovement, snapshotCount: game.oddsSnapshots.length, publicBetting });
 
   return NextResponse.json(analysis, { status: 201 });
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { Game, OddsSnapshot, PublicBettingData, AIAnalysis } from "@edgeiq/db";
 import type { LineMovementResult } from "@edgeiq/models";
 import { EdgeScoreGauge } from "./EdgeScoreGauge";
@@ -24,8 +23,7 @@ function fmt(odds: number) {
   return `${odds > 0 ? "+" : ""}${odds}`;
 }
 
-// For NBA: use last word ("Lakers"). For NCAAB: drop last word ("Duke Blue Devils" -> "Duke Blue", "Michigan State Spartans" -> "Michigan State")
-function abbr(teamName: string, sport: string): string {
+function abbr teamName: string, sport: string): string {
   const words = teamName.split(" ");
   if (sport === "basketball_ncaab") {
     return words.length > 1 ? words.slice(0, -1).join(" ") : teamName;
@@ -34,7 +32,6 @@ function abbr(teamName: string, sport: string): string {
 }
 
 export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }: GameCardProps) {
-  const [showDetails, setShowDetails] = useState(false);
   const edgeScore = aiAnalysis?.edgeScore ?? 0;
   const rec = (aiAnalysis?.recommendation ?? "PASS") as keyof typeof REC_STYLES;
   const recStyle = REC_STYLES[rec];
@@ -44,8 +41,6 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
   const summaryBody = betSideMatch
     ? aiAnalysis!.summary.replace(betSideMatch[0], "").replace(/^[\s\u2014\u2013-]+/, "")
     : aiAnalysis?.summary ?? "";
-
-  const keyFactors: string[] = aiAnalysis?.keyFactors ? JSON.parse(aiAnalysis.keyFactors) : [];
 
   const latestByMarket = odds.reduceRight<Record<string, OddsSnapshot>>((acc, snap) => {
     if (!acc[snap.market]) acc[snap.market] = snap;
@@ -64,7 +59,11 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
         </h3>
         <p className="text-xs text-gray-500 mt-0.5">
           {new Date(game.commenceTime).toLocaleString([], {
-            weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
           })}
         </p>
       </div>
@@ -76,20 +75,22 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
             {aiAnalysis ? (
               <>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${recStyle.badge}`}>
-                    {recStyle.label}
-                  </span>
+                  {rec !== "PASS" && (
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${recStyle.badge}`}>
+                      {recStyle.label}
+                    </span>
+                  )}
                   {lineMovement?.isSharp && (
-                    <span className="text-orange-400 text-xs font-medium">\u26a1 Sharp</span>
+                    <span className="text-orange-400 text-xs font-medium">⚡ Sharp</span>
                   )}
                 </div>
-                {betSide && rec !== "PASS" && (
+                {betSide && (
                   <p className="text-white font-semibold text-sm mb-1">{betSide}</p>
                 )}
                 <p className="text-gray-400 text-xs leading-relaxed">{summaryBody}</p>
               </>
             ) : (
-              <p className="text-gray-600 text-xs italic mt-2">Analyzing\u2026</p>
+              <p className="text-gray-600 text-xs italic mt-2">Analyzing…</p>
             )}
           </div>
         </div>
@@ -108,29 +109,36 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
                   <span className="text-white font-mono shrink-0">{fmt(h2h.awayOdds)}</span>
                 </div>
               </>
-            ) : <p className="text-gray-600">\u2014</p>}
+            ) : (
+              <p className="text-gray-600">—</p>
+            )}
           </div>
 
           <div className="bg-gray-800 rounded p-2">
             <p className="text-gray-500 mb-1 font-medium">
-              Spread{lineMovement?.isSharp && <span className="text-orange-400 ml-1">\u26a1</span>}
+              Spread
+              {lineMovement?.isSharp && (
+                <span className="text-orange-400 ml-1">⚡</span>
+              )}
             </p>
             {spread ? (
               <>
                 <div className="flex justify-between items-baseline">
                   <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam, game.sport)}</span>
                   <span className="text-white font-mono shrink-0">
-                    {spread.spread !== null ? (spread.spread > 0 ? "+" : "") + spread.spread : "\u2014"}
+                    {spread.spread !== null ? (spread.spread > 0 ? "+" : "") + spread.spread : "—"}
                   </span>
                 </div>
                 <div className="flex justify-between items-baseline mt-0.5">
                   <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam, game.sport)}</span>
                   <span className="text-white font-mono shrink-0">
-                    {spread.spread !== null ? ((-spread.spread) > 0 ? "+" : "") + (-spread.spread) : "\u2014"}
+                    {spread.spread !== null ? (-spread.spread > 0 ? "+" : "") + -spread.spread : "—"}
                   </span>
                 </div>
               </>
-            ) : <p className="text-gray-600">\u2014</p>}
+            ) : (
+              <p className="text-gray-600">—</p>
+            )}
           </div>
 
           <div className="bg-gray-800 rounded p-2">
@@ -139,38 +147,42 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
               <>
                 <div className="flex justify-between items-baseline">
                   <span className="text-gray-400">O/U</span>
-                  <span className="text-white font-mono shrink-0">{total.total ?? "\u2014"}</span>
+                  <span className="text-white font-mono shrink-0">{total.total ?? "—"}</span>
                 </div>
                 <div className="flex justify-between items-baseline mt-0.5">
                   <span className="text-gray-500 text-[10px]">vig</span>
-                  <span className="text-gray-500 font-mono text-[10px] shrink-0">{fmt(total.homeOdds)}/{fmt(total.awayOdds)}</span>
+                  <span className="text-gray-500 font-mono text-[10px] shrink-0">
+                    {fmt(total.homeOdds)}/{fmt(total.awayOdds)}
+                  </span>
                 </div>
               </>
-            ) : <p className="text-gray-600">\u2014</p>}
+            ) : (
+              <p className="text-gray-600">—</p>
+            )}
           </div>
         </div>
 
         <LineMovementChart snapshots={odds} />
 
-        {keyFactors.length > 0 && (
-          <div>
-            <button
-              onClick={() => setShowDetails(!showDetails)}
-              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-            >
-              <span>{showDetails ? "\u25b2" : "\u25bc"}</span>
-              <span>Key Factors</span>
-            </button>
-            {showDetails && (
-              <ul className="mt-2 space-y-1">
-                {keyFactors.map((f, i) => (
-                  <li key={i} className="text-xs text-gray-400 flex gap-1.5">
-                    <span className="text-blue-500 shrink-0">\u2022</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            )}
+        {publicBetting && (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400 font-medium">Public Betting</p>
+            {[
+              { label: "Tickets", home: publicBetting.homeTicketPct, away: publicBetting.awayTicketPct },
+              { label: "Money", home: publicBetting.homeMoneyPct, away: publicBetting.awayMoneyPct },
+            ].map(({ label, home, away }) => (
+              <div key={label}>
+                <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+                  <span>{abbr(game.homeTeam, game.sport)} {home.toFixed(0)}%</span>
+                  <span className="text-gray-400">{label}</span>
+                  <span>{away.toFixed(0)}% {abbr(game.awayTeam, game.sport)}</span>
+                </div>
+                <div className="flex h-2 rounded overflow-hidden bg-gray-700">
+                  <div className="bg-blue-500" style={{ width: `${home}%` }} />
+                  <div className="bg-amber-500" style={{ width: `${away}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

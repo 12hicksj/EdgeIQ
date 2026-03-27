@@ -19,21 +19,32 @@ interface LineMovementChartProps {
 export function LineMovementChart({ snapshots }: LineMovementChartProps) {
   const spreadSnaps = snapshots
     .filter((s) => s.market === "spreads" && s.spread !== null)
-    .slice(-20);
+    .slice(-40);
 
   if (spreadSnaps.length < 2) return null;
 
-  const data = spreadSnaps.map((s) => ({
-    time: new Date(s.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  // Deduplicate by minute — keep last snapshot per minute
+  const byMinute = new Map<string, (typeof spreadSnaps)[0]>();
+  for (const s of spreadSnaps) {
+    const key = new Date(s.capturedAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    byMinute.set(key, s);
+  }
+
+  const data = Array.from(byMinute.entries()).map(([time, s]) => ({
+    time,
     spread: s.spread,
   }));
+
+  if (data.length < 2) return null;
 
   const spreads = data.map((d) => d.spread as number);
   const minSpread = Math.min(...spreads);
   const maxSpread = Math.max(...spreads);
   const moved = Math.abs(maxSpread - minSpread) >= 0.5;
 
-  // Always show at least a 4-point window centered on the spread values
   const mid = (minSpread + maxSpread) / 2;
   const halfRange = Math.max(2, (maxSpread - minSpread) / 2 + 0.5);
   const domainMin = Math.round((mid - halfRange) * 2) / 2;
@@ -53,7 +64,10 @@ export function LineMovementChart({ snapshots }: LineMovementChartProps) {
       return (
         <div className="bg-gray-800 border border-gray-600 rounded p-2 text-xs">
           <p className="text-gray-400">{label}</p>
-          <p className="text-white">Home {val > 0 ? "+" : ""}{val}</p>
+          <p className="text-white">
+            Home {val > 0 ? "+" : ""}
+            {val}
+          </p>
         </div>
       );
     }
@@ -63,13 +77,18 @@ export function LineMovementChart({ snapshots }: LineMovementChartProps) {
   return (
     <div>
       <p className="text-xs text-gray-500 mb-1">
-        Spread Movement {moved && <span className="text-orange-400">(line moved)</span>}
+        Spread Movement{" "}
+        {moved && <span className="text-orange-400">(line moved)</span>}
       </p>
       <div className="h-32">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 8, left: -28, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-            <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 9 }} interval="preserveStartEnd" />
+            <XAxis
+              dataKey="time"
+              tick={{ fill: "#6b7280", fontSize: 9 }}
+              interval="preserveStartEnd"
+            />
             <YAxis
               tick={{ fill: "#6b7280", fontSize: 9 }}
               reversed

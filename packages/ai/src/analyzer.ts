@@ -6,16 +6,15 @@ import {
   GAME_ANALYSIS_SYSTEM_PROMPT,
   type GameAnalysisParams,
 } from "./prompts/gameAnalysis";
-import { buildDailyDigestPrompt } from "./prompts/dashboardSummary";
 import { detectLineMovement, detectReverseLineMovement } from "@edgeiq/models";
 
 function extractEdgeScore(text: string): number {
   const match = text.match(/EDGE_SCORE:\s*(\d+(?:\.\d+)?)/i);
   if (match) {
     const score = parseFloat(match[1]);
-    return Math.min(10, Math.max(1, score));
+    return Math.min(10, Math.max(1, Math.round(score * 10) / 10));
   }
-  return 5;
+  return 5.0;
 }
 
 function extractRecommendation(text: string): "STRONG_BET" | "LEAN" | "PASS" {
@@ -117,7 +116,7 @@ export async function analyzeUnanalyzedGames(): Promise<number> {
     }
 
     try {
-      await analyzeGame({ game, latestOdds: latestH2h, lineMovement, publicBetting });
+      await analyzeGame({ game, latestOdds: latestH2h, lineMovement, snapshotCount: game.oddsSnapshots.length, publicBetting });
       analyzed++;
     } catch {
       // Skip failed analyses — don't block the page load
@@ -127,32 +126,3 @@ export async function analyzeUnanalyzedGames(): Promise<number> {
   return analyzed;
 }
 
-export async function generateDailyDigest(date: Date): Promise<string> {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
-
-  const games = await prisma.game.findMany({
-    where: { commenceTime: { gte: startOfDay, lte: endOfDay } },
-  });
-
-  const gameIds = games.map((g) => g.id);
-  const analyses = await prisma.aIAnalysis.findMany({
-    where: {
-      gameId: { in: gameIds },
-      generatedAt: { gte: startOfDay, lte: endOfDay },
-    },
-    orderBy: { edgeScore: "desc" },
-  });
-
-  const prompt = buildDailyDigestPrompt(games, analyses);
-
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  return response.content[0].type === "text" ? response.content[0].text : "";
-}
