@@ -1,5 +1,5 @@
 {
-  "name": "@betting/db",
+  "name": "@edgeiq/db",
   "version": "0.1.0",
   "main": "./src/index.ts",
   "scripts": {

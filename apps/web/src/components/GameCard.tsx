@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { Game, OddsSnapshot, PublicBettingData, AIAnalysis } from "@betting/db";
-import type { LineMovementResult } from "@betting/models";
+import type { Game, OddsSnapshot, PublicBettingData, AIAnalysis } from "@edgeiq/db";
+import type { LineMovementResult } from "@edgeiq/models";
 import { EdgeScoreGauge } from "./EdgeScoreGauge";
 import { LineMovementChart } from "./LineMovementChart";
 
@@ -14,180 +13,183 @@ interface GameCardProps {
   aiAnalysis: AIAnalysis | null;
 }
 
-function RecommendationBadge({ rec }: { rec: string }) {
-  const styles: Record<string, string> = {
-    STRONG_BET: "bg-green-900 text-green-300 border border-green-700",
-    LEAN: "bg-yellow-900 text-yellow-300 border border-yellow-700",
-    PASS: "bg-gray-800 text-gray-400 border border-gray-600",
-  };
-  return (
-    <span
-      className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${styles[rec] ?? styles.PASS}`}
-    >
-      {rec.replace("_", " ")}
-    </span>
-  );
+const REC_STYLES = {
+  STRONG_BET: { badge: "bg-green-900 text-green-300 border border-green-700", label: "STRONG BET" },
+  LEAN: { badge: "bg-yellow-900 text-yellow-300 border border-yellow-700", label: "LEAN" },
+  PASS: { badge: "bg-gray-800 text-gray-400 border border-gray-600", label: "PASS" },
+};
+
+function fmt(odds: number) {
+  return `${odds > 0 ? "+" : ""}${odds}`;
 }
 
-export function GameCard({
-  game,
-  odds,
-  lineMovement,
-  publicBetting,
-  aiAnalysis,
-}: GameCardProps) {
-  const [expanded, setExpanded] = useState(false);
-  const latestOdds = odds[odds.length - 1];
-  const edgeScore = aiAnalysis?.edgeScore ?? 0;
+const MASCOT_ADJECTIVES = new Set(["Blue", "Red", "Golden", "Silver", "Fighting", "Running", "Tar", "Flying", "Green", "Black", "Yellow", "Purple", "Orange", "White", "Cardinal"]);
 
-  const keyFactors: string[] = aiAnalysis?.keyFactors
-    ? JSON.parse(aiAnalysis.keyFactors)
-    : [];
+function abbr(teamName: string, sport: string): string {
+  const words = teamName.split(" ");
+  if (sport === "basketball_ncaab") {
+    if (words.length <= 1) return teamName;
+    const withoutMascot = words.slice(0, -1);
+    if (withoutMascot.length > 1 && MASCOT_ADJECTIVES.has(withoutMascot[withoutMascot.length - 1]!)) {
+      return withoutMascot.slice(0, -1).join(" ");
+    }
+    return withoutMascot.join(" ");
+  }
+  return words[words.length - 1] ?? teamName;
+}
+
+export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }: GameCardProps) {
+  const edgeScore = aiAnalysis?.edgeScore ?? 0;
+  const rec = (aiAnalysis?.recommendation ?? "PASS") as keyof typeof REC_STYLES;
+  const recStyle = REC_STYLES[rec];
+
+  const betSideMatch = aiAnalysis?.summary?.match(/^(Home|Away):\s*[^\u2014\u2013-]+/i);
+  const betSide = betSideMatch ? betSideMatch[0].trim() : null;
+  const summaryBody = betSideMatch
+    ? aiAnalysis!.summary.replace(betSideMatch[0], "").replace(/^[\s\u2014\u2013-]+/, "")
+    : aiAnalysis?.summary ?? "";
+
+  const latestByMarket = odds.reduceRight<Record<string, OddsSnapshot>>((acc, snap) => {
+    if (!acc[snap.market]) acc[snap.market] = snap;
+    return acc;
+  }, {});
+  const h2h = latestByMarket["h2h"];
+  const spread = latestByMarket["spreads"];
+  const total = latestByMarket["totals"];
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 bg-gray-800 flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide">
-            {game.sport}
-          </p>
-          <h3 className="text-white font-semibold text-sm">
-            {game.awayTeam} <span className="text-gray-400">@</span>{" "}
-            {game.homeTeam}
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {new Date(game.commenceTime).toLocaleString()}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          {aiAnalysis && (
-            <RecommendationBadge rec={aiAnalysis.recommendation} />
-          )}
-        </div>
+    <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex flex-col">
+      <div className="px-4 py-3 bg-gray-800">
+        <p className="text-xs text-gray-400 uppercase tracking-wide">{game.sportTitle || game.sport}</p>
+        <h3 className="text-white font-semibold text-sm mt-0.5">
+          {game.awayTeam} <span className="text-gray-400">@</span> {game.homeTeam}
+        </h3>
+        <p className="text-xs text-gray-500 mt-0.5">
+          {new Date(game.commenceTime).toLocaleString([], {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </p>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Edge score + odds row */}
-        <div className="flex items-center gap-4">
+      <div className="p-4 space-y-4 flex-1 flex flex-col">
+        <div className="flex items-start gap-3">
           <EdgeScoreGauge score={edgeScore} />
-          {latestOdds && (
-            <div className="flex-1 grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-gray-800 rounded p-2">
-                <p className="text-gray-400">Home</p>
-                <p className="text-white font-mono">
-                  {latestOdds.homeOdds > 0 ? "+" : ""}
-                  {latestOdds.homeOdds}
-                </p>
-              </div>
-              <div className="bg-gray-800 rounded p-2">
-                <p className="text-gray-400">Away</p>
-                <p className="text-white font-mono">
-                  {latestOdds.awayOdds > 0 ? "+" : ""}
-                  {latestOdds.awayOdds}
-                </p>
-              </div>
-              {lineMovement && lineMovement.openingSpread !== null && (
-                <>
-                  <div className="bg-gray-800 rounded p-2">
-                    <p className="text-gray-400">Open</p>
-                    <p className="text-white font-mono">
-                      {lineMovement.openingSpread > 0 ? "+" : ""}
-                      {lineMovement.openingSpread}
-                    </p>
-                  </div>
-                  <div className="bg-gray-800 rounded p-2">
-                    <p className="text-gray-400">
-                      Current{" "}
-                      {lineMovement.isSharp && (
-                        <span className="text-orange-400">⚡</span>
-                      )}
-                    </p>
-                    <p className="text-white font-mono">
-                      {(lineMovement.currentSpread ?? 0) > 0 ? "+" : ""}
-                      {lineMovement.currentSpread}
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          <div className="flex-1 min-w-0">
+            {aiAnalysis ? (
+              <>
+                <div className="flex items-center gap-2 mb-1.5">
+                  {rec !== "PASS" && (
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${recStyle.badge}`}>
+                      {recStyle.label}
+                    </span>
+                  )}
+                  {lineMovement?.isSharp && (
+                    <span className="text-orange-400 text-xs font-medium">⚡ Sharp</span>
+                  )}
+                </div>
+                {betSide && (
+                  <p className="text-white font-semibold text-sm mb-1">{betSide}</p>
+                )}
+                <p className="text-gray-400 text-xs leading-relaxed">{summaryBody}</p>
+              </>
+            ) : (
+              <p className="text-gray-600 text-xs italic mt-2">Analyzing…</p>
+            )}
+          </div>
         </div>
 
-        {/* Public betting bars */}
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="bg-gray-800 rounded p-2">
+            <p className="text-gray-500 mb-1 font-medium">Moneyline</p>
+            {h2h ? (
+              <>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam, game.sport)}</span>
+                  <span className="text-white font-mono shrink-0">{fmt(h2h.homeOdds)}</span>
+                </div>
+                <div className="flex justify-between items-baseline mt-0.5">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam, game.sport)}</span>
+                  <span className="text-white font-mono shrink-0">{fmt(h2h.awayOdds)}</span>
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-600">—</p>
+            )}
+          </div>
+
+          <div className="bg-gray-800 rounded p-2">
+            <p className="text-gray-500 mb-1 font-medium">
+              Spread
+              {lineMovement?.isSharp && (
+                <span className="text-orange-400 ml-1">⚡</span>
+              )}
+            </p>
+            {spread ? (
+              <>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam, game.sport)}</span>
+                  <span className="text-white font-mono shrink-0">
+                    {spread.spread !== null ? (spread.spread > 0 ? "+" : "") + spread.spread : "—"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-baseline mt-0.5">
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam, game.sport)}</span>
+                  <span className="text-white font-mono shrink-0">
+                    {spread.spread !== null ? (-spread.spread > 0 ? "+" : "") + -spread.spread : "—"}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-600">—</p>
+            )}
+          </div>
+
+          <div className="bg-gray-800 rounded p-2">
+            <p className="text-gray-500 mb-1 font-medium">Total</p>
+            {total ? (
+              <>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-400">O/U</span>
+                  <span className="text-white font-mono shrink-0">{total.total ?? "—"}</span>
+                </div>
+                <div className="flex justify-between items-baseline mt-0.5">
+                  <span className="text-gray-500 text-[10px]">vig</span>
+                  <span className="text-gray-500 font-mono text-[10px] shrink-0">
+                    {fmt(total.homeOdds)}/{fmt(total.awayOdds)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-600">—</p>
+            )}
+          </div>
+        </div>
+
+        <LineMovementChart snapshots={odds} />
+
         {publicBetting && (
           <div className="space-y-2">
             <p className="text-xs text-gray-400 font-medium">Public Betting</p>
             {[
-              {
-                label: "Tickets",
-                home: publicBetting.homeTicketPct,
-                away: publicBetting.awayTicketPct,
-              },
-              {
-                label: "Money",
-                home: publicBetting.homeMoneyPct,
-                away: publicBetting.awayMoneyPct,
-              },
+              { label: "Tickets", home: publicBetting.homeTicketPct, away: publicBetting.awayTicketPct },
+              { label: "Money", home: publicBetting.homeMoneyPct, away: publicBetting.awayMoneyPct },
             ].map(({ label, home, away }) => (
               <div key={label}>
                 <div className="flex justify-between text-xs text-gray-500 mb-0.5">
-                  <span>
-                    {game.homeTeam.split(" ").pop()} {home.toFixed(0)}%
-                  </span>
+                  <span>{abbr(game.homeTeam, game.sport)} {home.toFixed(0)}%</span>
                   <span className="text-gray-400">{label}</span>
-                  <span>
-                    {away.toFixed(0)}% {game.awayTeam.split(" ").pop()}
-                  </span>
+                  <span>{away.toFixed(0)}% {abbr(game.awayTeam, game.sport)}</span>
                 </div>
                 <div className="flex h-2 rounded overflow-hidden bg-gray-700">
-                  <div
-                    className="bg-blue-500"
-                    style={{ width: `${home}%` }}
-                  />
-                  <div
-                    className="bg-amber-500"
-                    style={{ width: `${away}%` }}
-                  />
+                  <div className="bg-blue-500" style={{ width: `${home}%` }} />
+                  <div className="bg-amber-500" style={{ width: `${away}%` }} />
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Odds history chart */}
-        {odds.length > 1 && <LineMovementChart snapshots={odds} />}
-
-        {/* Expandable AI analysis */}
-        {aiAnalysis && (
-          <div>
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="w-full text-left text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-            >
-              <span>{expanded ? "▲" : "▼"}</span>
-              <span>AI Analysis</span>
-            </button>
-            {expanded && (
-              <div className="mt-2 space-y-2">
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  {aiAnalysis.summary}
-                </p>
-                {keyFactors.length > 0 && (
-                  <ul className="space-y-1">
-                    {keyFactors.map((f, i) => (
-                      <li
-                        key={i}
-                        className="text-xs text-gray-400 flex gap-1"
-                      >
-                        <span className="text-blue-500">•</span>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>

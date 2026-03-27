@@ -1,4 +1,4 @@
-import type { Game, AIAnalysis } from "@betting/db";
+import type { Game, AIAnalysis } from "@edgeiq/db";
 
 /**
  * Build the daily digest prompt for Claude

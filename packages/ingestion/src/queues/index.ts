@@ -1,11 +1,13 @@
 import { Queue } from "bullmq";
-import IORedis from "ioredis";
 
-const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+const redisUrl = new URL(process.env.REDIS_URL || "redis://localhost:6379");
 
-export const redisConnection = new IORedis(redisUrl, {
-  maxRetriesPerRequest: null,
-});
+export const redisConnection = {
+  host: redisUrl.hostname,
+  port: parseInt(redisUrl.port || "6379"),
+  ...(redisUrl.password && { password: decodeURIComponent(redisUrl.password) }),
+  maxRetriesPerRequest: null as null,
+};
 
 const defaultJobOptions = {
   attempts: 3,

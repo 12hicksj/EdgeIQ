@@ -1,44 +1,58 @@
-import { prisma } from "@betting/db";
-import type { AIAnalysis } from "@betting/db";
+import { prisma } from "@edgeiq/db";
+import type { AIAnalysis } from "@edgeiq/db";
 import { anthropic, MODEL } from "./client";
 import {
   buildGameAnalysisPrompt,
   GAME_ANALYSIS_SYSTEM_PROMPT,
   type GameAnalysisParams,
 } from "./prompts/gameAnalysis";
-import { buildDailyDigestPrompt } from "./prompts/dashboardSummary";
+import { detectLineMovement, detectReverseLineMovement } from "@edgeiq/models";
 
-function extractRecommendation(
-  text: string
-): "STRONG_BET" | "LEAN" | "PASS" {
-  if (/STRONG_BET/i.test(text)) return "STRONG_BET";
-  if (/\bLEAN\b/i.test(text)) return "LEAN";
+function extractEdgeScore(text: string): number {
+  const match = text.match(/EDGE_SCORE:\s*(\d+(?:\.\d+)?)/i);
+  if (match) {
+    const score = parseFloat(match[1]);
+    return Math.min(10, Math.max(1, Math.round(score * 10) / 10));
+  }
+  return 5.0;
+}
+
+function extractRecommendation(text: string): "STRONG_BET" | "LEAN" | "PASS" {
+  const match = text.match(/RECOMMENDATION:\s*(STRONG_BET|LEAN|PASS)/i);
+  if (match) {
+    const val = match[1].toUpperCase();
+    if (val === "STRONG_BET" || val === "LEAN" || val === "PASS") return val;
+  }
   return "PASS";
 }
 
+function extractBetSide(text: string): string | null {
+  const match = text.match(/^BET:\s*(.+)/im);
+  if (!match) return null;
+  const val = match[1].trim();
+  if (/^none$/i.test(val)) return null;
+  return val;
+}
+
+function extractSummary(text: string): string {
+  const match = text.match(/SUMMARY:\s*([\s\S]*?)(?=KEY_FACTORS:|$)/i);
+  if (match) return match[1].trim();
+  return text.split(/(?<=[.!?])\s+/).slice(0, 3).join(" ");
+}
+
 function extractKeyFactors(text: string): string[] {
+  const match = text.match(/KEY_FACTORS:\s*([\s\S]*)/i);
+  const section = match ? match[1] : text;
   const factors: string[] = [];
   const bulletRegex = /^[-•*]\s+(.+)$/gm;
-  let match;
-  while ((match = bulletRegex.exec(text)) !== null) {
-    factors.push(match[1].trim());
+  let m;
+  while ((m = bulletRegex.exec(section)) !== null) {
+    factors.push(m[1].trim());
   }
   return factors.slice(0, 5);
 }
 
-/**
- * Analyze a game using Claude and persist the result
- *
- * Calls Claude with the game analysis prompt, parses the response
- * to extract edge score rationale, key factors, and recommendation,
- * then persists an AIAnalysis record to the database.
- *
- * @param params - GameAnalysisParams with game metrics
- * @returns Persisted AIAnalysis record
- */
-export async function analyzeGame(
-  params: GameAnalysisParams
-): Promise<AIAnalysis> {
+export async function analyzeGame(params: GameAnalysisParams): Promise<AIAnalysis> {
   const userPrompt = buildGameAnalysisPrompt(params);
 
   const response = await anthropic.messages.create({
@@ -48,20 +62,19 @@ export async function analyzeGame(
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  const responseText =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  const responseText = response.content[0].type === "text" ? response.content[0].text : "";
 
+  const edgeScore = extractEdgeScore(responseText);
   const recommendation = extractRecommendation(responseText);
+  const betSide = extractBetSide(responseText);
+  const rawSummary = extractSummary(responseText);
+  const summary = betSide ? `${betSide} — ${rawSummary}` : rawSummary;
   const keyFactors = extractKeyFactors(responseText);
-
-  // Extract summary (first 3-4 sentences)
-  const sentences = responseText.split(/(?<=[.!?])\s+/);
-  const summary = sentences.slice(0, 4).join(" ");
 
   const analysis = await prisma.aIAnalysis.create({
     data: {
       gameId: params.game.id,
-      edgeScore: params.edgeScore,
+      edgeScore,
       summary,
       keyFactors: JSON.stringify(keyFactors),
       recommendation,
@@ -72,49 +85,44 @@ export async function analyzeGame(
   return analysis;
 }
 
-/**
- * Generate a daily betting digest using Claude
- *
- * Fetches all games and analyses for the given date, calls Claude
- * with the daily digest prompt, and returns the markdown string.
- *
- * @param date - Date to generate digest for
- * @returns Markdown formatted daily digest
- */
-export async function generateDailyDigest(date: Date): Promise<string> {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+export async function analyzeUnanalyzedGames(): Promise<number> {
+  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const thirtyMinFromNow = new Date(Date.now() + 30 * 60 * 1000);
 
   const games = await prisma.game.findMany({
     where: {
-      commenceTime: {
-        gte: startOfDay,
-        lte: endOfDay,
+      commenceTime: { gt: thirtyMinFromNow },
+      oddsSnapshots: { some: {} },
+      aiAnalyses: {
+        none: { generatedAt: { gt: sixHoursAgo } },
       },
     },
-  });
-
-  const gameIds = games.map((g) => g.id);
-  const analyses = await prisma.aIAnalysis.findMany({
-    where: {
-      gameId: { in: gameIds },
-      generatedAt: {
-        gte: startOfDay,
-        lte: endOfDay,
-      },
+    include: {
+      oddsSnapshots: { orderBy: { capturedAt: "asc" } },
+      publicBettingData: { orderBy: { capturedAt: "desc" }, take: 1 },
     },
-    orderBy: { edgeScore: "desc" },
+    take: 20,
   });
 
-  const prompt = buildDailyDigestPrompt(games, analyses);
+  let analyzed = 0;
+  for (const game of games) {
+    const latestH2h = [...game.oddsSnapshots].reverse().find((s) => s.market === "h2h");
+    if (!latestH2h) continue;
 
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
-  });
+    const lineMovement = detectLineMovement(game.oddsSnapshots);
+    const publicBetting = game.publicBettingData[0] ?? null;
+    if (publicBetting) {
+      lineMovement.isSharp = detectReverseLineMovement(publicBetting, lineMovement);
+    }
 
-  return response.content[0].type === "text" ? response.content[0].text : "";
+    try {
+      await analyzeGame({ game, latestOdds: latestH2h, lineMovement, snapshotCount: game.oddsSnapshots.length, publicBetting });
+      analyzed++;
+    } catch {
+      // Skip failed analyses — don't block the page load
+    }
+  }
+
+  return analyzed;
 }
+

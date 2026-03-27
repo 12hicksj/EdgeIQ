@@ -1,7 +1,7 @@
 "use client";
 
-import type { Bet, Game } from "@betting/db";
-import { roiSummary, closingLineValue } from "@betting/models";
+import type { Bet, Game } from "@edgeiq/db";
+import { roiSummary, closingLineValue } from "@edgeiq/models";
 
 interface BetTrackerProps {
   bets: Array<Bet & { game: Game }>;

@@ -1,13 +1,17 @@
 {
-  "name": "@betting/ingestion",
+  "name": "@edgeiq/ingestion",
   "version": "0.1.0",
   "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./services": "./src/services/oddsIngestion.ts"
+  },
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc"
   },
   "dependencies": {
-    "@betting/db": "*",
+    "@edgeiq/db": "*",
     "bullmq": "^5.7.0",
     "axios": "^1.6.8",
     "node-cron": "^3.0.3",

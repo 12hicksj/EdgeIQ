@@ -1,4 +1,4 @@
-import type { Bet } from "@betting/db";
+import type { Bet } from "@edgeiq/db";
 
 /**
  * Summary of ROI across a collection of bets

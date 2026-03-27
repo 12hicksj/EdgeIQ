@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@betting/db";
-import { analyzeGame } from "@betting/ai";
-import { detectLineMovement, detectReverseLineMovement } from "@betting/models";
+import { prisma } from "@edgeiq/db";
+import { analyzeGame } from "@edgeiq/ai";
+import { detectLineMovement, detectReverseLineMovement } from "@edgeiq/models";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(
   _request: NextRequest,
@@ -21,27 +23,18 @@ export async function POST(
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
   }
 
-  const latestOdds = game.oddsSnapshots[game.oddsSnapshots.length - 1];
+  const latestOdds = [...game.oddsSnapshots].reverse().find((s) => s.market === "h2h");
   if (!latestOdds) {
     return NextResponse.json({ error: "No odds data" }, { status: 422 });
   }
 
   const lineMovement = detectLineMovement(game.oddsSnapshots);
   const publicBetting = game.publicBettingData[0] ?? null;
-
   if (publicBetting) {
     lineMovement.isSharp = detectReverseLineMovement(publicBetting, lineMovement);
   }
 
-  const edgeScore = 5; // default — real calculation done in models package
-
-  const analysis = await analyzeGame({
-    game,
-    latestOdds,
-    lineMovement,
-    publicBetting: publicBetting!,
-    edgeScore,
-  });
+  const analysis = await analyzeGame({ game, latestOdds, lineMovement, snapshotCount: game.oddsSnapshots.length, publicBetting });
 
   return NextResponse.json(analysis, { status: 201 });
 }

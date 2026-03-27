@@ -81,7 +81,7 @@ export function EdgeScoreGauge({ score }: EdgeScoreGaugeProps) {
           {clampedScore.toFixed(1)}
         </text>
         <text x={cx} y={cy + 26} textAnchor="middle" fill="#9ca3af" fontSize={9}>
-          EDGE SCORE
+          IQ SCORE
         </text>
       </svg>
     </div>

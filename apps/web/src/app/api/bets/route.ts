@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@betting/db";
+import { prisma } from "@edgeiq/db";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const bets = await prisma.bet.findMany({
