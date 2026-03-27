@@ -23,7 +23,7 @@ function fmt(odds: number) {
   return `${odds > 0 ? "+" : ""}${odds}`;
 }
 
-function abbr teamName: string, sport: string): string {
+function abbr(teamName: string, sport: string): string {
   const words = teamName.split(" ");
   if (sport === "basketball_ncaab") {
     return words.length > 1 ? words.slice(0, -1).join(" ") : teamName;
