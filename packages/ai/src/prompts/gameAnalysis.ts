@@ -19,7 +19,7 @@ export function buildGameAnalysisPrompt(params: GameAnalysisParams): string {
       ? `Opening Spread: ${lineMovement.openingSpread > 0 ? "+" : ""}${lineMovement.openingSpread}
 Current Spread: ${lineMovement.currentSpread > 0 ? "+" : ""}${lineMovement.currentSpread}
 Spread Movement: ${lineMovement.delta.toFixed(1)} points ${lineMovement.direction}`
-      : "Spread: N/A";
+      : "Spread: N/A (insufficient history)";
 
   const totalInfo =
     lineMovement.openingTotal !== null && lineMovement.currentTotal !== null
@@ -32,14 +32,23 @@ Current Total: ${lineMovement.currentTotal}`
 Away: ${publicBetting.awayTicketPct.toFixed(1)}% of tickets / ${publicBetting.awayMoneyPct.toFixed(1)}% of money`
     : "Not available";
 
+  // Derive implied probabilities from moneyline
+  const homeImplied = latestOdds.homeOdds < 0
+    ? (-latestOdds.homeOdds / (-latestOdds.homeOdds + 100)) * 100
+    : (100 / (latestOdds.homeOdds + 100)) * 100;
+  const awayImplied = latestOdds.awayOdds < 0
+    ? (-latestOdds.awayOdds / (-latestOdds.awayOdds + 100)) * 100
+    : (100 / (latestOdds.awayOdds + 100)) * 100;
+  const vig = homeImplied + awayImplied - 100;
+
   return `**GAME: ${game.awayTeam} @ ${game.homeTeam}**
 Sport: ${game.sport}
 Commence Time: ${game.commenceTime.toISOString()}
 
 **CURRENT ODDS (${latestOdds.bookmaker})**
-Home Moneyline: ${latestOdds.homeOdds > 0 ? "+" : ""}${latestOdds.homeOdds}
-Away Moneyline: ${latestOdds.awayOdds > 0 ? "+" : ""}${latestOdds.awayOdds}
-Market: ${latestOdds.market}
+Home Moneyline: ${latestOdds.homeOdds > 0 ? "+" : ""}${latestOdds.homeOdds} (implied: ${homeImplied.toFixed(1)}%)
+Away Moneyline: ${latestOdds.awayOdds > 0 ? "+" : ""}${latestOdds.awayOdds} (implied: ${awayImplied.toFixed(1)}%)
+Vig: ${vig.toFixed(1)}%
 
 **LINE MOVEMENT**
 ${spreadInfo}
@@ -49,7 +58,9 @@ Sharp Money Indicator: ${lineMovement.isSharp ? "YES - Reverse line movement det
 **PUBLIC BETTING PERCENTAGES**
 ${publicBettingInfo}
 
-${injuryNotes ? `**INJURY NOTES**\n${injuryNotes}\n` : ""}
+${injuryNotes ? `**INJURY NOTES**
+${injuryNotes}
+` : ""}
 
 Analyze this game and respond in this exact format:
 
@@ -58,12 +69,17 @@ BET: [Home: TeamName / Away: TeamName / None]
 RECOMMENDATION: [STRONG_BET / LEAN / PASS]
 
 SUMMARY:
-[2-3 sentences explaining the betting situation and which side has value, or why to pass]
+[3-5 sentences analyzing this game. Discuss the matchup, the implied probabilities, any value you see in the line, and your reasoning. Be specific about which team has the edge and why.]
 
 KEY_FACTORS:
 - [factor 1]
 - [factor 2]
 - [factor 3]
 
-Rules: STRONG_BET = edge score 7+, LEAN = 4-6, PASS = 1-3 or no clear edge. Always specify a team for STRONG_BET and LEAN.`;
+Scoring guide:
+- 8-10: Strong statistical or situational edge, clear value in the line
+- 5-7: Moderate edge, one side has a meaningful advantage
+- 3-4: Slight lean, evenly matched with minor edge
+- 1-2: No clear edge, avoid
+When line movement and public betting data are unavailable, base your score on implied probability analysis, the size of the favorite/underdog gap, and any contextual factors about the matchup. A typical game with no special indicators should score 4-6.`;
 }

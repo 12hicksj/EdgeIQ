@@ -139,13 +139,22 @@ export default async function DashboardPage({
     <main className="min-h-screen bg-gray-950 text-white">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">EdgeIQ</h1>
-            <p className="text-gray-400 text-sm mt-1">
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long", year: "numeric", month: "long", day: "numeric",
-              })}
-            </p>
+          <div className="flex items-center gap-3">
+            {/* IQ Logo */}
+            <div className="w-10 h-10 rounded-lg bg-gray-900 border border-gray-700 flex items-center justify-center shrink-0">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="1.5" />
+                <text x="12" y="16" textAnchor="middle" fill="#22c55e" fontSize="9" fontWeight="bold" fontFamily="monospace">IQ</text>
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">EdgeIQ</h1>
+              <p className="text-gray-400 text-sm mt-0.5">
+                {new Date().toLocaleDateString("en-US", {
+                  weekday: "long", year: "numeric", month: "long", day: "numeric",
+                })}
+              </p>
+            </div>
           </div>
         </div>
 

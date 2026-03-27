@@ -24,8 +24,13 @@ function fmt(odds: number) {
   return `${odds > 0 ? "+" : ""}${odds}`;
 }
 
-function abbr(teamName: string) {
-  return teamName.split(" ").pop() ?? teamName;
+// For NBA: use last word ("Lakers"). For NCAAB: drop last word ("Duke Blue Devils" -> "Duke Blue", "Michigan State Spartans" -> "Michigan State")
+function abbr(teamName: string, sport: string): string {
+  const words = teamName.split(" ");
+  if (sport === "basketball_ncaab") {
+    return words.length > 1 ? words.slice(0, -1).join(" ") : teamName;
+  }
+  return words[words.length - 1] ?? teamName;
 }
 
 export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }: GameCardProps) {
@@ -34,10 +39,10 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
   const rec = (aiAnalysis?.recommendation ?? "PASS") as keyof typeof REC_STYLES;
   const recStyle = REC_STYLES[rec];
 
-  const betSideMatch = aiAnalysis?.summary?.match(/^(Home|Away):\s*[^—–-]+/i);
+  const betSideMatch = aiAnalysis?.summary?.match(/^(Home|Away):\s*[^\u2014\u2013-]+/i);
   const betSide = betSideMatch ? betSideMatch[0].trim() : null;
   const summaryBody = betSideMatch
-    ? aiAnalysis!.summary.replace(betSideMatch[0], "").replace(/^[\s—–-]+/, "")
+    ? aiAnalysis!.summary.replace(betSideMatch[0], "").replace(/^[\s\u2014\u2013-]+/, "")
     : aiAnalysis?.summary ?? "";
 
   const keyFactors: string[] = aiAnalysis?.keyFactors ? JSON.parse(aiAnalysis.keyFactors) : [];
@@ -75,16 +80,16 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
                     {recStyle.label}
                   </span>
                   {lineMovement?.isSharp && (
-                    <span className="text-orange-400 text-xs font-medium">⚡ Sharp</span>
+                    <span className="text-orange-400 text-xs font-medium">\u26a1 Sharp</span>
                   )}
                 </div>
                 {betSide && rec !== "PASS" && (
                   <p className="text-white font-semibold text-sm mb-1">{betSide}</p>
                 )}
-                <p className="text-gray-400 text-xs leading-relaxed line-clamp-3">{summaryBody}</p>
+                <p className="text-gray-400 text-xs leading-relaxed">{summaryBody}</p>
               </>
             ) : (
-              <p className="text-gray-600 text-xs italic mt-2">Analyzing…</p>
+              <p className="text-gray-600 text-xs italic mt-2">Analyzing\u2026</p>
             )}
           </div>
         </div>
@@ -95,37 +100,37 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
             {h2h ? (
               <>
                 <div className="flex justify-between items-baseline">
-                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam)}</span>
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam, game.sport)}</span>
                   <span className="text-white font-mono shrink-0">{fmt(h2h.homeOdds)}</span>
                 </div>
                 <div className="flex justify-between items-baseline mt-0.5">
-                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam)}</span>
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam, game.sport)}</span>
                   <span className="text-white font-mono shrink-0">{fmt(h2h.awayOdds)}</span>
                 </div>
               </>
-            ) : <p className="text-gray-600">—</p>}
+            ) : <p className="text-gray-600">\u2014</p>}
           </div>
 
           <div className="bg-gray-800 rounded p-2">
             <p className="text-gray-500 mb-1 font-medium">
-              Spread{lineMovement?.isSharp && <span className="text-orange-400 ml-1">⚡</span>}
+              Spread{lineMovement?.isSharp && <span className="text-orange-400 ml-1">\u26a1</span>}
             </p>
             {spread ? (
               <>
                 <div className="flex justify-between items-baseline">
-                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam)}</span>
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.homeTeam, game.sport)}</span>
                   <span className="text-white font-mono shrink-0">
-                    {spread.spread !== null ? (spread.spread > 0 ? "+" : "") + spread.spread : "—"}
+                    {spread.spread !== null ? (spread.spread > 0 ? "+" : "") + spread.spread : "\u2014"}
                   </span>
                 </div>
                 <div className="flex justify-between items-baseline mt-0.5">
-                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam)}</span>
+                  <span className="text-gray-400 truncate mr-1">{abbr(game.awayTeam, game.sport)}</span>
                   <span className="text-white font-mono shrink-0">
-                    {spread.spread !== null ? ((-spread.spread) > 0 ? "+" : "") + (-spread.spread) : "—"}
+                    {spread.spread !== null ? ((-spread.spread) > 0 ? "+" : "") + (-spread.spread) : "\u2014"}
                   </span>
                 </div>
               </>
-            ) : <p className="text-gray-600">—</p>}
+            ) : <p className="text-gray-600">\u2014</p>}
           </div>
 
           <div className="bg-gray-800 rounded p-2">
@@ -134,14 +139,14 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
               <>
                 <div className="flex justify-between items-baseline">
                   <span className="text-gray-400">O/U</span>
-                  <span className="text-white font-mono shrink-0">{total.total ?? "—"}</span>
+                  <span className="text-white font-mono shrink-0">{total.total ?? "\u2014"}</span>
                 </div>
                 <div className="flex justify-between items-baseline mt-0.5">
                   <span className="text-gray-500 text-[10px]">vig</span>
                   <span className="text-gray-500 font-mono text-[10px] shrink-0">{fmt(total.homeOdds)}/{fmt(total.awayOdds)}</span>
                 </div>
               </>
-            ) : <p className="text-gray-600">—</p>}
+            ) : <p className="text-gray-600">\u2014</p>}
           </div>
         </div>
 
@@ -153,14 +158,14 @@ export function GameCard({ game, odds, lineMovement, publicBetting, aiAnalysis }
               onClick={() => setShowDetails(!showDetails)}
               className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
             >
-              <span>{showDetails ? "▲" : "▼"}</span>
+              <span>{showDetails ? "\u25b2" : "\u25bc"}</span>
               <span>Key Factors</span>
             </button>
             {showDetails && (
               <ul className="mt-2 space-y-1">
                 {keyFactors.map((f, i) => (
                   <li key={i} className="text-xs text-gray-400 flex gap-1.5">
-                    <span className="text-blue-500 shrink-0">•</span>
+                    <span className="text-blue-500 shrink-0">\u2022</span>
                     {f}
                   </li>
                 ))}

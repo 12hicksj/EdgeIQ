@@ -29,7 +29,15 @@ export function LineMovementChart({ snapshots }: LineMovementChartProps) {
   }));
 
   const spreads = data.map((d) => d.spread as number);
-  const moved = Math.abs(Math.max(...spreads) - Math.min(...spreads)) >= 0.5;
+  const minSpread = Math.min(...spreads);
+  const maxSpread = Math.max(...spreads);
+  const moved = Math.abs(maxSpread - minSpread) >= 0.5;
+
+  // Always show at least a 4-point window centered on the spread values
+  const mid = (minSpread + maxSpread) / 2;
+  const halfRange = Math.max(2, (maxSpread - minSpread) / 2 + 0.5);
+  const domainMin = Math.round((mid - halfRange) * 2) / 2;
+  const domainMax = Math.round((mid + halfRange) * 2) / 2;
 
   const CustomTooltip = ({
     active,
@@ -62,10 +70,22 @@ export function LineMovementChart({ snapshots }: LineMovementChartProps) {
           <LineChart data={data} margin={{ top: 4, right: 8, left: -28, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 9 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill: "#6b7280", fontSize: 9 }} reversed />
+            <YAxis
+              tick={{ fill: "#6b7280", fontSize: 9 }}
+              reversed
+              domain={[domainMin, domainMax]}
+              tickCount={5}
+            />
             <Tooltip content={<CustomTooltip />} />
             <ReferenceLine y={0} stroke="#374151" strokeDasharray="4 2" />
-            <Line type="monotone" dataKey="spread" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+            <Line
+              type="monotone"
+              dataKey="spread"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 3 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
