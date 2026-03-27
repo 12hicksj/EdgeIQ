@@ -23,10 +23,17 @@ function fmt(odds: number) {
   return `${odds > 0 ? "+" : ""}${odds}`;
 }
 
+const MASCOT_ADJECTIVES = new Set(["Blue", "Red", "Golden", "Silver", "Fighting", "Running", "Tar", "Flying", "Green", "Black", "Yellow", "Purple", "Orange", "White", "Cardinal"]);
+
 function abbr(teamName: string, sport: string): string {
   const words = teamName.split(" ");
   if (sport === "basketball_ncaab") {
-    return words.length > 1 ? words.slice(0, -1).join(" ") : teamName;
+    if (words.length <= 1) return teamName;
+    const withoutMascot = words.slice(0, -1);
+    if (withoutMascot.length > 1 && MASCOT_ADJECTIVES.has(withoutMascot[withoutMascot.length - 1]!)) {
+      return withoutMascot.slice(0, -1).join(" ");
+    }
+    return withoutMascot.join(" ");
   }
   return words[words.length - 1] ?? teamName;
 }
