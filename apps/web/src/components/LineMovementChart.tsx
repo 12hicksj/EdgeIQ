@@ -7,8 +7,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 import type { OddsSnapshot } from "@edgeiq/db";
 
@@ -16,23 +16,20 @@ interface LineMovementChartProps {
   snapshots: OddsSnapshot[];
 }
 
-interface ChartDataPoint {
-  time: string;
-  homeOdds: number;
-  awayOdds: number;
-  bookmaker: string;
-}
-
 export function LineMovementChart({ snapshots }: LineMovementChartProps) {
-  const data: ChartDataPoint[] = snapshots.map((s) => ({
-    time: new Date(s.capturedAt).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-    homeOdds: s.homeOdds,
-    awayOdds: s.awayOdds,
-    bookmaker: s.bookmaker,
+  const spreadSnaps = snapshots
+    .filter((s) => s.market === "spreads" && s.spread !== null)
+    .slice(-20);
+
+  if (spreadSnaps.length < 2) return null;
+
+  const data = spreadSnaps.map((s) => ({
+    time: new Date(s.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    spread: s.spread,
   }));
+
+  const spreads = data.map((d) => d.spread as number);
+  const moved = Math.abs(Math.max(...spreads) - Math.min(...spreads)) >= 0.5;
 
   const CustomTooltip = ({
     active,
@@ -40,22 +37,15 @@ export function LineMovementChart({ snapshots }: LineMovementChartProps) {
     label,
   }: {
     active?: boolean;
-    payload?: Array<{ value: number; name: string; payload: ChartDataPoint }>;
+    payload?: Array<{ value: number }>;
     label?: string;
   }) => {
     if (active && payload && payload.length) {
+      const val = payload[0].value;
       return (
         <div className="bg-gray-800 border border-gray-600 rounded p-2 text-xs">
           <p className="text-gray-400">{label}</p>
-          <p className="text-gray-400">
-            Book: {payload[0]?.payload.bookmaker}
-          </p>
-          {payload.map((p) => (
-            <p key={p.name} className="text-white">
-              {p.name}: {p.value > 0 ? "+" : ""}
-              {p.value}
-            </p>
-          ))}
+          <p className="text-white">Home {val > 0 ? "+" : ""}{val}</p>
         </div>
       );
     }
@@ -63,34 +53,22 @@ export function LineMovementChart({ snapshots }: LineMovementChartProps) {
   };
 
   return (
-    <div className="h-48">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis dataKey="time" tick={{ fill: "#9ca3af", fontSize: 10 }} />
-          <YAxis tick={{ fill: "#9ca3af", fontSize: 10 }} />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            wrapperStyle={{ fontSize: "11px", color: "#9ca3af" }}
-          />
-          <Line
-            type="monotone"
-            dataKey="homeOdds"
-            name="Home"
-            stroke="#3b82f6"
-            strokeWidth={2}
-            dot={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="awayOdds"
-            name="Away"
-            stroke="#f59e0b"
-            strokeWidth={2}
-            dot={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+    <div>
+      <p className="text-xs text-gray-500 mb-1">
+        Spread Movement {moved && <span className="text-orange-400">(line moved)</span>}
+      </p>
+      <div className="h-32">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 4, right: 8, left: -28, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+            <XAxis dataKey="time" tick={{ fill: "#6b7280", fontSize: 9 }} interval="preserveStartEnd" />
+            <YAxis tick={{ fill: "#6b7280", fontSize: 9 }} reversed />
+            <Tooltip content={<CustomTooltip />} />
+            <ReferenceLine y={0} stroke="#374151" strokeDasharray="4 2" />
+            <Line type="monotone" dataKey="spread" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
