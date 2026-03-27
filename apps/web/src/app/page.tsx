@@ -23,9 +23,10 @@ async function ingestIfStale(): Promise<void> {
   const isStale =
     !latest || Date.now() - latest.capturedAt.getTime() > STALE_AFTER_MS;
 
-  if (!isStale) retuexport const dynamic = "force-dynamic";
+  if (!isStale) return;
 
-import .now() + 7 * 24 * 60 * 60 * 1000
+  const commenceTimeTo = new Date(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
   ).toISOString();
 
   await Promise.all(
