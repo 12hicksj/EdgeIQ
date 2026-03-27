@@ -10,15 +10,28 @@ export interface GameAnalysisParams {
   injuryNotes?: string;
 }
 
-export const GAME_ANALYSIS_SYSTEM_PROMPT = `You are a sharp sports betting analyst. Assess betting value using market odds, line movement, and public betting patterns.
+export const GAME_ANALYSIS_SYSTEM_PROMPT = `You are a sharp sports betting analyst. Score betting edge from 1.0 to 10.0 using a signal-based framework. Every game has a unique score — do NOT cluster near 5.0.
 
-EDGE SCORE — express as one decimal (e.g. 6.4, never just 6):
-- 8.0-10.0: Strong edge — sharp money signal, clear reverse line movement, or obvious market mispricing
-- 5.5-7.9: Moderate edge — favorable line movement, mild sharp action, or slight implied probability edge
-- 3.5-5.4: Slight lean — minor signals, mostly efficient market
-- 1.0-3.4: No edge — market appears fully efficient
+SIGNAL-BASED SCORING — start at 5.0, apply each adjustment that fits:
 
-When only moneyline odds are available, anchor around 4.5-5.5 for evenly matched games. A notable mismatch in true probability vs. posted odds can push to 6.5-7.0. Never exceed 7.5 without a concrete sharp-money signal. Always use exactly one decimal place.`;
+BULLISH signals (push score UP):
++2.5 to +3.5  Sharp reverse line movement confirmed (public overwhelmingly on one side, money moving the other)
++1.5 to +2.5  Clear line movement without public explanation (≥1.5 pt spread move, or sharp total shift)
++1.0 to +1.5  Mild but consistent public/money divergence (15-30 pt split between ticket% and money%)
++0.5 to +1.0  Slight line drift or minor steam suggesting informed action
+
+BEARISH signals (push score DOWN):
+-2.0 to -3.0  Zero movement + balanced public betting = efficient market (score floors at 1.5)
+-1.0 to -1.5  Minimal data (1-2 snapshots only) with no detectable sharp signals
+-0.5 to -1.0  Heavy favorite (true prob >70%) with movement in expected direction = square action, no edge
+-0.5           High vig (>6%) without corresponding sharp signal = book neutralized exposure
+
+CAPS: 8.5+ requires confirmed reverse line movement with supporting evidence. 1.5 is the floor for any game with odds data.
+
+RECOMMENDATION thresholds:
+STRONG_BET: 7.5+  |  LEAN: 5.5–7.4  |  PASS: below 5.5
+
+Think through each applicable signal explicitly before outputting the score. Express score as exactly one decimal.`;
 
 function impliedProb(americanOdds: number): number {
   if (americanOdds > 0) return 100 / (americanOdds + 100);
@@ -52,9 +65,30 @@ export function buildGameAnalysisPrompt(params: GameAnalysisParams): string {
     lineSection = `${sp}${tot}\nSharp money: ${lineMovement.isSharp ? "YES — reverse line movement" : "No"}`;
   }
 
-  const publicSection = publicBetting
-    ? `Public Betting:\nHome: ${publicBetting.homeTicketPct.toFixed(1)}% tickets / ${publicBetting.homeMoneyPct.toFixed(1)}% money\nAway: ${publicBetting.awayTicketPct.toFixed(1)}% tickets / ${publicBetting.awayMoneyPct.toFixed(1)}% money`
-    : "Public Betting: Not available";
+  let publicSection: string;
+  if (publicBetting) {
+    const homeDiv = Math.abs(publicBetting.homeTicketPct - publicBetting.homeMoneyPct);
+    const awayDiv = Math.abs(publicBetting.awayTicketPct - publicBetting.awayMoneyPct);
+    const maxDiv = Math.max(homeDiv, awayDiv);
+    const sharpSide = homeDiv > awayDiv
+      ? (publicBetting.homeMoneyPct > publicBetting.homeTicketPct ? `Away (sharp money vs public on ${game.homeTeam})` : `Home (sharp money vs public on ${game.awayTeam})`)
+      : (publicBetting.awayMoneyPct > publicBetting.awayTicketPct ? `Home (sharp money vs public on ${game.awayTeam})` : `Away (sharp money vs public on ${game.homeTeam})`);
+    const divergenceLabel = maxDiv >= 20 ? `STRONG divergence (${maxDiv.toFixed(0)}pt gap) — ${sharpSide}`
+      : maxDiv >= 10 ? `Mild divergence (${maxDiv.toFixed(0)}pt gap) — ${sharpSide}`
+      : `Balanced (${maxDiv.toFixed(0)}pt gap — no clear sharp signal)`;
+    publicSection = `Public Betting:\nHome: ${publicBetting.homeTicketPct.toFixed(1)}% tickets / ${publicBetting.homeMoneyPct.toFixed(1)}% money\nAway: ${publicBetting.awayTicketPct.toFixed(1)}% tickets / ${publicBetting.awayMoneyPct.toFixed(1)}% money\nSignal: ${divergenceLabel}`;
+  } else {
+    publicSection = "Public Betting: Not available";
+  }
+
+  const vigNum = parseFloat(vig);
+  const vigLabel = vigNum > 6 ? `HIGH (${vig}%) — books have heavy exposure, square-heavy action likely`
+    : vigNum > 4 ? `Normal (${vig}%)`
+    : `Low (${vig}%) — sharp/efficient market`;
+  const homeTrueNum = parseFloat(homeTrue);
+  const favoriteLabel = homeTrueNum > 72 ? `${game.homeTeam} heavy favorite (${homeTrue}% true prob) — limited overlay`
+    : homeTrueNum < 28 ? `${game.awayTeam} heavy favorite (${awayTrue}% true prob) — limited overlay`
+    : `Competitive matchup (${homeTrue}% / ${awayTrue}%)`;
 
   return `GAME: ${game.awayTeam} @ ${game.homeTeam}
 Sport: ${game.sport}
@@ -63,7 +97,8 @@ Tip-off: ${game.commenceTime.toISOString()}
 ODDS (${latestOdds.bookmaker})
 Home (${game.homeTeam}): ${latestOdds.homeOdds > 0 ? "+" : ""}${latestOdds.homeOdds} => ${homeTrue}% true prob
 Away (${game.awayTeam}): ${latestOdds.awayOdds > 0 ? "+" : ""}${latestOdds.awayOdds} => ${awayTrue}% true prob
-Vig: ${vig}%
+Vig: ${vigLabel}
+Matchup: ${favoriteLabel}
 
 LINE MOVEMENT
 ${lineSection}
