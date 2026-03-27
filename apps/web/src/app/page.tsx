@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { Suspense } from "react";
 import { prisma } from "@edgeiq/db";
 import { Prisma } from "@prisma/client";
-import { generateDailyDigest, analyzeUnanalyzedGames } from "@edgeiq/ai";
+import { analyzeUnanalyzedGames } from "@edgeiq/ai";
 import { ingestOddsForSport } from "@edgeiq/ingestion/services";
 import { GameCard } from "@/components/GameCard";
 import { GamesFilter } from "@/components/GamesFilter";
@@ -23,10 +23,9 @@ async function ingestIfStale(): Promise<void> {
   const isStale =
     !latest || Date.now() - latest.capturedAt.getTime() > STALE_AFTER_MS;
 
-  if (!isStale) return;
+  if (!isStale) retuexport const dynamic = "force-dynamic";
 
-  const commenceTimeTo = new Date(
-    Date.now() + 7 * 24 * 60 * 60 * 1000
+import .now() + 7 * 24 * 60 * 60 * 1000
   ).toISOString();
 
   await Promise.all(
@@ -47,14 +46,6 @@ interface SearchParams {
   sort?: string;
   order?: string;
   days?: string;
-}
-
-async function getDailyDigest(): Promise<string | null> {
-  try {
-    return await generateDailyDigest(new Date());
-  } catch {
-    return null;
-  }
 }
 
 function LoadingSkeleton() {
@@ -135,14 +126,11 @@ export default async function DashboardPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const [digest, sportRows] = await Promise.all([
-    getDailyDigest(),
-    prisma.game.findMany({
-      select: { sport: true, sportTitle: true },
-      distinct: ["sport"],
-      orderBy: { sport: "asc" },
-    }),
-  ]);
+  const sportRows = await prisma.game.findMany({
+    select: { sport: true, sportTitle: true },
+    distinct: ["sport"],
+    orderBy: { sport: "asc" },
+  });
 
   const sports = sportRows.map((r) => ({ key: r.sport, title: r.sportTitle || r.sport }));
 
@@ -159,17 +147,6 @@ export default async function DashboardPage({
             </p>
           </div>
         </div>
-
-        {digest && (
-          <div className="bg-gray-900 rounded-lg border border-gray-700 p-4">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-              Daily Digest
-            </h2>
-            <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">
-              {digest}
-            </div>
-          </div>
-        )}
 
         <section>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
