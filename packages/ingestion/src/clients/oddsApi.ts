@@ -5,6 +5,10 @@ const BASE_URL = "https://api.the-odds-api.com/v4";
 
 const client = axios.create({ baseURL: BASE_URL });
 
+function toOddsApiDate(iso: string): string {
+  return iso.replace(/\.\d{3}Z$/, "Z");
+}
+
 // Retry once on 429 with a 5-second backoff
 client.interceptors.response.use(undefined, async (error) => {
   if (error.response?.status === 429 && !error.config._retried) {
@@ -119,8 +123,8 @@ export async function getEvents(
   options: { commenceTimeFrom?: string; commenceTimeTo?: string; eventIds?: string } = {}
 ): Promise<GameEvent[]> {
   const params: Record<string, string> = { apiKey: apiKey(), dateFormat: "iso" };
-  if (options.commenceTimeFrom) params.commenceTimeFrom = options.commenceTimeFrom;
-  if (options.commenceTimeTo) params.commenceTimeTo = options.commenceTimeTo;
+  if (options.commenceTimeFrom) params.commenceTimeFrom = toOddsApiDate(options.commenceTimeFrom);
+  if (options.commenceTimeTo) params.commenceTimeTo = toOddsApiDate(options.commenceTimeTo);
   if (options.eventIds) params.eventIds = options.eventIds;
   const response = await client.get<GameEvent[]>(`/sports/${sport}/events`, { params });
   return response.data;
@@ -144,8 +148,8 @@ export async function getOdds(
     dateFormat: "iso",
   };
   if (options.bookmakers) params.bookmakers = options.bookmakers;
-  if (options.commenceTimeFrom) params.commenceTimeFrom = options.commenceTimeFrom;
-  if (options.commenceTimeTo) params.commenceTimeTo = options.commenceTimeTo;
+  if (options.commenceTimeFrom) params.commenceTimeFrom = toOddsApiDate(options.commenceTimeFrom);
+  if (options.commenceTimeTo) params.commenceTimeTo = toOddsApiDate(options.commenceTimeTo);
   if (options.eventIds) params.eventIds = options.eventIds;
   const response = await client.get<OddsGame[]>(`/sports/${sport}/odds`, { params });
   return { games: response.data, rateLimit: extractRateLimit(response) };

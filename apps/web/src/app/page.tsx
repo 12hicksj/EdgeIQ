@@ -1,10 +1,52 @@
+export const dynamic = "force-dynamic";
+
 import { Suspense } from "react";
 import { prisma } from "@edgeiq/db";
+import { Prisma } from "@prisma/client";
 import { generateDailyDigest } from "@edgeiq/ai";
+import { ingestOddsForSport } from "@edgeiq/ingestion/services";
 import { GameCard } from "@/components/GameCard";
 import { BetTracker } from "@/components/BetTracker";
+import { GamesFilter } from "@/components/GamesFilter";
 import { detectLineMovement, detectReverseLineMovement } from "@edgeiq/models";
 import type { LineMovementResult } from "@edgeiq/models";
+
+const SPORTS = ["americanfootball_nfl", "basketball_nba"];
+const MARKETS = ["h2h", "spreads", "totals"];
+const STALE_AFTER_MS = 5 * 60 * 1000; // re-ingest if newest snapshot is older than 5 minutes
+
+async function ingestIfStale(): Promise<void> {
+  const latest = await prisma.oddsSnapshot.findFirst({
+    orderBy: { capturedAt: "desc" },
+    select: { capturedAt: true },
+  });
+
+  const isStale =
+    !latest || Date.now() - latest.capturedAt.getTime() > STALE_AFTER_MS;
+
+  if (!isStale) return;
+
+  const commenceTimeTo = new Date(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  await Promise.all(
+    SPORTS.map((sport) =>
+      ingestOddsForSport(sport, MARKETS, { commenceTimeTo })
+    )
+  );
+}
+
+const VALID_SORT_FIELDS = ["commenceTime", "homeTeam", "awayTeam", "sport"] as const;
+type SortField = (typeof VALID_SORT_FIELDS)[number];
+
+interface SearchParams {
+  sport?: string;
+  team?: string;
+  sort?: string;
+  order?: string;
+  days?: string;
+}
 
 async function getDailyDigest(): Promise<string | null> {
   try {
@@ -27,31 +69,44 @@ function LoadingSkeleton() {
   );
 }
 
-async function GamesGrid() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+async function GamesGrid({ searchParams }: { searchParams: SearchParams }) {
+  await ingestIfStale();
+
+  const sort: SortField =
+    VALID_SORT_FIELDS.find((f) => f === searchParams.sort) ?? "commenceTime";
+  const order = searchParams.order === "desc" ? "desc" : "asc";
+  const days = Math.min(Math.max(parseInt(searchParams.days || "1", 10), 1), 7);
+
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + days);
+
+  const where: Prisma.GameWhereInput = {
+    commenceTime: { gte: start, lt: end },
+    ...(searchParams.sport && { sport: searchParams.sport }),
+    ...(searchParams.team && {
+      OR: [
+        { homeTeam: { contains: searchParams.team, mode: "insensitive" } },
+        { awayTeam: { contains: searchParams.team, mode: "insensitive" } },
+      ],
+    }),
+  };
 
   const games = await prisma.game.findMany({
-    where: {
-      commenceTime: {
-        gte: today,
-        lt: tomorrow,
-      },
-    },
+    where,
     include: {
       oddsSnapshots: { orderBy: { capturedAt: "asc" } },
       publicBettingData: { orderBy: { capturedAt: "desc" }, take: 1 },
       aiAnalyses: { orderBy: { generatedAt: "desc" }, take: 1 },
     },
-    orderBy: { commenceTime: "asc" },
+    orderBy: { [sort]: order },
   });
 
   if (games.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
-        No games scheduled for today.
+        No games found.
       </div>
     );
   }
@@ -93,8 +148,21 @@ async function BetsSection() {
   return <BetTracker bets={bets} />;
 }
 
-export default async function DashboardPage() {
-  const digest = await getDailyDigest();
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const [digest, sportRows] = await Promise.all([
+    getDailyDigest(),
+    prisma.game.findMany({
+      select: { sport: true, sportTitle: true },
+      distinct: ["sport"],
+      orderBy: { sport: "asc" },
+    }),
+  ]);
+
+  const sports = sportRows.map((r) => ({ key: r.sport, title: r.sportTitle || r.sport }));
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
@@ -102,9 +170,7 @@ export default async function DashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">
-              EdgeIQ
-            </h1>
+            <h1 className="text-2xl font-bold text-white">EdgeIQ</h1>
             <p className="text-gray-400 text-sm mt-1">
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
@@ -128,13 +194,16 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        {/* Today's games */}
+        {/* Games section */}
         <section>
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Today&apos;s Games
-          </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <h2 className="text-lg font-semibold text-white">Games</h2>
+            <Suspense fallback={null}>
+              <GamesFilter sports={sports} />
+            </Suspense>
+          </div>
           <Suspense fallback={<LoadingSkeleton />}>
-            <GamesGrid />
+            <GamesGrid searchParams={searchParams} />
           </Suspense>
         </section>
 
