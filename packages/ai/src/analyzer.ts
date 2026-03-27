@@ -3,6 +3,7 @@ import type { AIAnalysis } from "@edgeiq/db";
 import { anthropic, MODEL } from "./client";
 import {
   buildGameAnalysisPrompt,
+  computeRawSignalScore,
   GAME_ANALYSIS_SYSTEM_PROMPT,
   type GameAnalysisParams,
 } from "./prompts/gameAnalysis";
@@ -53,7 +54,8 @@ function extractKeyFactors(text: string): string[] {
 }
 
 export async function analyzeGame(params: GameAnalysisParams): Promise<AIAnalysis> {
-  const userPrompt = buildGameAnalysisPrompt(params);
+  const rawSignalScore = computeRawSignalScore(params);
+  const userPrompt = buildGameAnalysisPrompt(params, rawSignalScore);
 
   const response = await anthropic.messages.create({
     model: MODEL,

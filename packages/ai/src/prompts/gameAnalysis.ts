@@ -10,35 +10,90 @@ export interface GameAnalysisParams {
   injuryNotes?: string;
 }
 
-export const GAME_ANALYSIS_SYSTEM_PROMPT = `You are a sharp sports betting analyst. Score betting edge from 1.0 to 10.0 using a signal-based framework. Every game has a unique score — do NOT cluster near 5.0.
+export const GAME_ANALYSIS_SYSTEM_PROMPT = `You are a sharp sports betting analyst providing context on top of a pre-computed signal score.
 
-SIGNAL-BASED SCORING — start at 5.0, apply each adjustment that fits:
+You will receive a RAW_SIGNAL_SCORE already calculated from market data (line movement, public/money divergence, vig, spread). Your job is to output a FINAL score by adjusting it ±1.5 based on factors the market data alone can't capture:
 
-BULLISH signals (push score UP):
-+2.5 to +3.5  Sharp reverse line movement confirmed (public overwhelmingly on one side, money moving the other)
-+1.5 to +2.5  Clear line movement without public explanation (≥1.5 pt spread move, or sharp total shift)
-+1.0 to +1.5  Mild but consistent public/money divergence (15-30 pt split between ticket% and money%)
-+0.5 to +1.0  Slight line drift or minor steam suggesting informed action
+ADJUST UP (+0.5 to +1.5) if you know:
+- This sport/matchup has historically sharp line movement patterns
+- One team has a meaningful situational edge (rest, travel, motivation)
+- The game total or spread suggests a style matchup that creates overlay
 
-BEARISH signals (push score DOWN):
--2.0 to -3.0  Zero movement + balanced public betting = efficient market (score floors at 1.5)
--1.0 to -1.5  Minimal data (1-2 snapshots only) with no detectable sharp signals
--0.5 to -1.0  Heavy favorite (true prob >70%) with movement in expected direction = square action, no edge
--0.5           High vig (>6%) without corresponding sharp signal = book neutralized exposure
+ADJUST DOWN (-0.5 to -1.5) if you know:
+- This is a very public-facing game (big market teams, primetime) inflating the signals
+- The matchup is lopsided in a way not captured by odds alone
+- There is a known reason for the line move that isn't sharp action
 
-CAPS: 8.5+ requires confirmed reverse line movement with supporting evidence. 1.5 is the floor for any game with odds data.
+HOLD (0 adjustment) if you have no meaningful additional context beyond the signal data.
 
-RECOMMENDATION thresholds:
-STRONG_BET: 7.5+  |  LEAN: 5.5–7.4  |  PASS: below 5.5
+RECOMMENDATION thresholds (use FINAL score):
+STRONG_BET: 7.0+  |  LEAN: 5.0–6.9  |  PASS: below 5.0
 
-Think through each applicable signal explicitly before outputting the score. Express score as exactly one decimal.`;
+Express FINAL score as exactly one decimal. The RAW_SIGNAL_SCORE is your anchor — only move away from it with genuine reasoning.`;
 
 function impliedProb(americanOdds: number): number {
   if (americanOdds > 0) return 100 / (americanOdds + 100);
   return Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
 }
 
-export function buildGameAnalysisPrompt(params: GameAnalysisParams): string {
+export function computeRawSignalScore(params: GameAnalysisParams): number {
+  const { latestOdds, lineMovement, snapshotCount, publicBetting } = params;
+
+  const homeImp = impliedProb(latestOdds.homeOdds);
+  const awayImp = impliedProb(latestOdds.awayOdds);
+  const juice = homeImp + awayImp;
+  const vig = juice - 1;
+  const favProb = Math.max(homeImp, awayImp) / juice;
+
+  let score = 5.0;
+
+  // --- Line movement signal (strongest available signal) ---
+  if (lineMovement.isSharp) {
+    // Confirmed reverse line movement: public one way, money the other
+    score += lineMovement.delta >= 1.5 ? 3.0 : 2.5;
+  } else if (lineMovement.delta >= 2.0) {
+    score += 2.0;
+  } else if (lineMovement.delta >= 1.0) {
+    score += 1.0;
+  } else if (lineMovement.delta >= 0.5) {
+    score += 0.5;
+  } else if (snapshotCount >= 8 && lineMovement.delta === 0) {
+    // Many snapshots, zero movement = efficient market confirmed
+    score -= 0.75;
+  }
+
+  // --- Public / money divergence signal ---
+  if (publicBetting) {
+    const homeDiv = Math.abs(publicBetting.homeTicketPct - publicBetting.homeMoneyPct);
+    const awayDiv = Math.abs(publicBetting.awayTicketPct - publicBetting.awayMoneyPct);
+    const maxDiv = Math.max(homeDiv, awayDiv);
+
+    if (maxDiv >= 30) score += 2.0;
+    else if (maxDiv >= 20) score += 1.5;
+    else if (maxDiv >= 12) score += 0.75;
+    else if (maxDiv >= 6) score += 0.25;
+    // balanced public = no adjustment (neither bullish nor bearish)
+  } else {
+    // No public data: slight uncertainty penalty when line is also stable
+    if (lineMovement.delta === 0) score -= 0.25;
+  }
+
+  // --- Data quality ---
+  if (snapshotCount <= 1) score -= 1.0;
+  else if (snapshotCount <= 3) score -= 0.25;
+
+  // --- Overlay penalty for heavy favorites ---
+  if (favProb > 0.78) score -= 1.0;
+  else if (favProb > 0.68) score -= 0.5;
+
+  // --- Vig signal ---
+  // High vig without sharp signal = books have heavy public exposure
+  if (vig > 0.065 && !lineMovement.isSharp) score -= 0.25;
+
+  return Math.max(1.5, Math.min(9.0, Math.round(score * 10) / 10));
+}
+
+export function buildGameAnalysisPrompt(params: GameAnalysisParams, rawSignalScore: number): string {
   const { game, latestOdds, lineMovement, snapshotCount, publicBetting, injuryNotes } = params;
 
   const homeImplied = impliedProb(latestOdds.homeOdds);
@@ -90,7 +145,9 @@ export function buildGameAnalysisPrompt(params: GameAnalysisParams): string {
     : homeTrueNum < 28 ? `${game.awayTeam} heavy favorite (${awayTrue}% true prob) — limited overlay`
     : `Competitive matchup (${homeTrue}% / ${awayTrue}%)`;
 
-  return `GAME: ${game.awayTeam} @ ${game.homeTeam}
+  return `RAW_SIGNAL_SCORE: ${rawSignalScore.toFixed(1)} (computed from line movement, public/money %, vig, data quality)
+
+GAME: ${game.awayTeam} @ ${game.homeTeam}
 Sport: ${game.sport}
 Tip-off: ${game.commenceTime.toISOString()}
 
@@ -108,12 +165,9 @@ ${injuryNotes ? `\nINJURY NOTES\n${injuryNotes}` : ""}
 
 Respond in this EXACT format:
 
-EDGE_SCORE: [X.X]
+EDGE_SCORE: [X.X — your final adjusted score]
+ADJUSTMENT: [+X.X or -X.X or 0.0 — how much you moved from RAW_SIGNAL_SCORE and why in one phrase]
 BET: [Home: TeamName | Away: TeamName | No Bet]
 RECOMMENDATION: [STRONG_BET | LEAN | PASS]
-SUMMARY: [2-3 sentences on the betting situation and what drives the score]
-KEY_FACTORS:
-- [factor 1]
-- [factor 2]
-- [factor 3]`;
+SUMMARY: [2-3 sentences on the betting situation and what drives the score]`;
 }
